@@ -70,10 +70,12 @@ func Minimap(c *ui.Context, st *State) ui.Element {
 				st.ed.services.Invalidate()
 			}
 		}
-		if blankDIP > 0 {
+		if blankDIP > 0 || st.minimapDrag.active {
 			// The blank the view scrolled into below the text's end
 			// lights its own block at the bottom and drags the view like
-			// the rows above it, as VS Code's minimap.
+			// the rows above it, as VS Code's minimap. It stays built
+			// through a drag of its own: taking it away mid-gesture
+			// cancels the press, which then drags nothing.
 			blank := ui.ButtonBase(c).FillWidth().Height(blankDIP).
 				Label(l10n.In(c.Locale()).GoToLine() + " " + strconv.Itoa(lineCount)).
 				HandleInput(func(ev ui.InputEvent) bool {
