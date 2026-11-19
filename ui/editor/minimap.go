@@ -72,8 +72,18 @@ func Minimap(c *ui.Context, st *State) ui.Element {
 		}
 		if blankDIP > 0 {
 			// The blank the view scrolled into below the text's end
-			// lights its own block at the bottom, as VS Code's minimap.
-			ui.Box(c).FillWidth().Height(blankDIP).Background(theme.Selection.Alpha(0.35))
+			// lights its own block at the bottom and drags the view like
+			// the rows above it, as VS Code's minimap.
+			blank := ui.ButtonBase(c).FillWidth().Height(blankDIP).
+				Label(l10n.In(c.Locale()).GoToLine() + " " + strconv.Itoa(lineCount)).
+				HandleInput(func(ev ui.InputEvent) bool {
+					return st.minimapInput(ev, lineCount-1, rows)
+				})
+			blank.Background(theme.Selection.Alpha(0.35))
+			if blank.Clicked() && !st.minimapDrag.moved {
+				st.SetScrollY(st.ed.scrollMax())
+				st.ed.services.Invalidate()
+			}
 		}
 	})
 }

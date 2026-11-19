@@ -138,3 +138,20 @@ func TestMinimapBandAtTheEndOfTheText(t *testing.T) {
 		t.Fatal("the blank below the text's end lights nothing")
 	}
 }
+
+// The blank block below the rows drags the view like the rows do: a
+// drag up from the end of the text scrolls back into it.
+func TestMinimapBlankBlockDrags(t *testing.T) {
+	ct := newEditorTest(t, "", strings.Repeat("line\n", 100))
+	ed := &ct.st.ed
+	ct.st.SetScrollY(ed.scrollMax())
+	ct.tt.Frame()
+	if !ct.st.minimapInput(ui.InputEvent{Kind: ui.InputPointerDown, Y: 30}, 99, 10) {
+		t.Fatal("the blank block takes no press")
+	}
+	ct.st.minimapInput(ui.InputEvent{Kind: ui.InputPointerMove, Y: 0}, 99, 10)
+	ct.st.minimapInput(ui.InputEvent{Kind: ui.InputPointerUp}, 99, 10)
+	if ct.st.ScrollY() >= ed.scrollMax() {
+		t.Fatal("the drag from the blank block did not scroll the view up")
+	}
+}
