@@ -1196,6 +1196,20 @@ func (msgs Messages) CommandPalette() string {
 	return Catalog.Format(msgs.locale, "commandPalette", nil)
 }
 
+// CodeActions says "Code actions"
+// in the language the app shows.
+//
+// Labels the code editor's menu of what can be done to the text.
+func CodeActions() string { return In(i18n.Locale()).CodeActions() }
+
+// CodeActions says "Code actions"
+// in the language of msgs.
+//
+// Labels the code editor's menu of what can be done to the text.
+func (msgs Messages) CodeActions() string {
+	return Catalog.Format(msgs.locale, "codeActions", nil)
+}
+
 // MenuUndo says "Undo"
 // in the language the app shows.
 //

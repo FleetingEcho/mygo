@@ -141,6 +141,9 @@ const (
 	// Diagnostics of the text.
 	NextDiagnostic
 	PreviousDiagnostic
+	// What a language server does to the text.
+	Rename
+	CodeActions
 	// Changes against the DiffBase, or the hunks of a diff.
 	NextHunk
 	PreviousHunk
@@ -168,6 +171,7 @@ var commandNames = [...]string{
 	"find", "findReplace", "findNext", "findPrevious", "useSelectionForFind", "findInSelection",
 	"commandPalette", "goToSymbol", "goToLine", "scrollCursorCenter", "scrollLineUp", "scrollLineDown", "goToDefinition", "showCompletions", "showHover",
 	"nextDiagnostic", "previousDiagnostic",
+	"rename", "codeActions",
 	"nextHunk", "previousHunk", "revertHunk", "toggleSoftWrap", "toggleLineNumbers",
 }
 
@@ -274,6 +278,7 @@ func macCodeBindings() []Binding {
 		{0, ui.KeyF12, 0, 0, GoToDefinition}, {ctrl, ui.KeySpace, 0, 0, ShowCompletions},
 		{cmd, ui.KeyK, cmd, ui.KeyI, ShowHover},
 		{0, ui.KeyF8, 0, 0, NextDiagnostic}, {sh, ui.KeyF8, 0, 0, PreviousDiagnostic},
+		{0, ui.KeyF2, 0, 0, Rename}, {cmd, ui.KeyPeriod, 0, 0, CodeActions},
 		{cmd, ui.KeyF8, 0, 0, NextHunk}, {cmd | sh, ui.KeyF8, 0, 0, PreviousHunk}, {cmd | alt, ui.KeyZ, 0, 0, RevertHunk},
 		{cmd, ui.KeyK, 0, ui.KeyZ, ToggleSoftWrap}, {cmd, ui.KeySemicolon, 0, 0, ToggleLineNumbers},
 	}
@@ -335,6 +340,7 @@ func pcCodeBindings() []Binding {
 		{0, ui.KeyF12, 0, 0, GoToDefinition}, {ctrl, ui.KeySpace, 0, 0, ShowCompletions},
 		{ctrl, ui.KeyK, ctrl, ui.KeyI, ShowHover},
 		{0, ui.KeyF8, 0, 0, NextDiagnostic}, {sh, ui.KeyF8, 0, 0, PreviousDiagnostic},
+		{0, ui.KeyF2, 0, 0, Rename}, {ctrl, ui.KeyPeriod, 0, 0, CodeActions},
 		{alt, ui.KeyF5, 0, 0, NextHunk}, {alt | sh, ui.KeyF5, 0, 0, PreviousHunk}, {ctrl | alt, ui.KeyZ, 0, 0, RevertHunk},
 		{alt, ui.KeyZ, 0, 0, ToggleSoftWrap},
 	}

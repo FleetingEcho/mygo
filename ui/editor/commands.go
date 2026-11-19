@@ -37,6 +37,10 @@ func (ed *editor) run(cmd Command) bool {
 			ed.complete.step(direction(cmd == MoveUp))
 			return true
 		}
+		if ed.acting() && (cmd == MoveUp || cmd == MoveDown) {
+			ed.actions.step(direction(cmd == MoveUp))
+			return true
+		}
 		rows := 1
 		page := max(1, int(ed.viewH/ed.view.lineHeight)-2)
 		switch cmd {
@@ -168,6 +172,12 @@ func (ed *editor) run(cmd Command) bool {
 			ed.complete.close()
 		case ed.hover.open():
 			ed.hover.close()
+		case ed.sig.open():
+			ed.sig.close()
+		case ed.actions.shown:
+			ed.actions.close()
+		case ed.rename.open:
+			ed.rename.close(ed)
 		case ed.palette.open:
 			ed.palette.close(ed)
 		case ed.symbols.open:
@@ -251,6 +261,9 @@ func (ed *editor) run(cmd Command) bool {
 	case Newline:
 		if ed.completing() {
 			return ed.acceptCompletion()
+		}
+		if ed.acting() {
+			return ed.acceptAction()
 		}
 		return ed.newline()
 	case NewlineAbove, NewlineBelow:
@@ -392,6 +405,10 @@ func (ed *editor) run(cmd Command) bool {
 		return ed.requestHover(ed.primary().head)
 	case NextDiagnostic, PreviousDiagnostic:
 		return ed.gotoDiagnostic(direction(cmd == PreviousDiagnostic))
+	case Rename:
+		return ed.requestRename()
+	case CodeActions:
+		return ed.requestCodeActions()
 	case NextHunk, PreviousHunk:
 		return ed.gotoHunk(direction(cmd == PreviousHunk))
 	case RevertHunk:

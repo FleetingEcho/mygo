@@ -23,48 +23,54 @@ const (
 type options struct {
 	// diffSide is the side of a diff viewer the editor shows, which
 	// names it.
-	diffSide      int8
-	readOnly      bool
-	font          ui.Font
-	lineHeight    float32
-	tabSize       int
-	indent        IndentStyle
-	wrap          bool
-	wrapColumn    int
-	lineNumbers   LineNumbers
-	whitespace    Whitespace
-	wrapGuides    []int
-	indentGuides  bool
-	scrollPastEnd bool
-	scrollMargin  int
-	autoClose     bool
-	folding       bool
-	activeLine    bool
-	cursorShape   CursorShape
-	fitContent    bool
-	placeholder   string
-	label         string
-	theme         *Theme
-	bindings      []Binding
-	snippets      map[string]*Snippet
-	symbols       []Symbol
-	gutterMarks   []GutterMark
-	backgrounds   []LineBackground
-	textBgs       []TextBackground
-	semantic      []SemanticToken
-	diffBase      *Buffer
-	onCompletion  func(CompletionRequest)
-	onHover       func(HoverRequest)
-	onDefinition  func(int)
-	onGutterClick func(int)
-	contextMenu   func(m *ui.Menu)
-	onInput       func(ui.InputEvent) bool
-	noInputMethod bool
+	diffSide        int8
+	readOnly        bool
+	font            ui.Font
+	lineHeight      float32
+	tabSize         int
+	indent          IndentStyle
+	wrap            bool
+	wrapColumn      int
+	lineNumbers     LineNumbers
+	whitespace      Whitespace
+	wrapGuides      []int
+	indentGuides    bool
+	scrollPastEnd   bool
+	scrollMargin    int
+	autoClose       bool
+	folding         bool
+	activeLine      bool
+	cursorShape     CursorShape
+	fitContent      bool
+	placeholder     string
+	label           string
+	theme           *Theme
+	bindings        []Binding
+	snippets        map[string]*Snippet
+	symbols         []Symbol
+	gutterMarks     []GutterMark
+	backgrounds     []LineBackground
+	textBgs         []TextBackground
+	semantic        []SemanticToken
+	diffBase        *Buffer
+	onCompletion    func(CompletionRequest)
+	onHover         func(HoverRequest)
+	onSignatureHelp func(SignatureHelpRequest)
+	onCodeActions   func(CodeActionRequest)
+	onRename        func(RenameRequest)
+	onDefinition    func(int)
+	onGutterClick   func(int)
+	contextMenu     func(m *ui.Menu)
+	onInput         func(ui.InputEvent) bool
+	noInputMethod   bool
 	// The parts' render functions, nil for the editor's own.
 	renderFindBar     func(*ui.Context, ui.Element, *FindBar)
 	renderGoToLine    func(*ui.Context, ui.Element, *GoToLineBar)
 	renderPalette     func(*ui.Context, ui.Element, *PaletteBar)
 	renderSymbols     func(*ui.Context, ui.Element, *SymbolBar)
+	renderSignature   func(*ui.Context, ui.Element, *SignatureCard)
+	renderActions     func(*ui.Context, ui.Element, *ActionMenu)
+	renderRename      func(*ui.Context, ui.Element, *RenameBar)
 	renderCompletions func(*ui.Context, ui.Element, *CompletionMenu)
 	renderHover       func(*ui.Context, ui.Element, *HoverCard)
 	// decor shows a diff in the editor.
@@ -235,6 +241,9 @@ type editor struct {
 	complete completions
 	snippet  *snippetSession
 	hover    hover
+	sig      signature
+	actions  codeActions
+	rename   renameBar
 	diags    []Diagnostic
 	gitDiff  *gitDiff
 	brackets bracketCache

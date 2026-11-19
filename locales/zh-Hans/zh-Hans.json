@@ -79,6 +79,7 @@
   "currentLine": "第 {line, number, ::group-off} 行，共 {lines, number, ::group-off} 行，第 {column, number, ::group-off} 列",
   "completions": "补全",
   "commandPalette": "命令面板",
+  "codeActions": "代码操作",
   "menuUndo": "撤销",
   "menuRedo": "重做",
   "menuCut": "剪切",

@@ -113,6 +113,16 @@ type State struct {
 	// OnHover asks the app what to show for the text under the pointer
 	// once it rests there: answer with ShowHover.
 	OnHover func(HoverRequest)
+	// OnSignatureHelp is asked as the text typed asks for the signature
+	// of a call, at its '(': give it with ShowSignatureHelp.
+	OnSignatureHelp func(SignatureHelpRequest)
+	// OnCodeActions is asked what can be done to the text at the caret
+	// (CodeActions): give what can with ShowCodeActions.
+	OnCodeActions func(CodeActionRequest)
+	// OnRename is asked what the caret is on to rename (Rename), and
+	// again with the new name the bar typed: apply the edits it makes
+	// with ApplyEdits.
+	OnRename func(RenameRequest)
 	// HoverDelay is how long the pointer rests on the text before the
 	// hover is asked for: a tooltip's, 600 ms, when zero or less.
 	HoverDelay time.Duration
@@ -158,8 +168,8 @@ type State struct {
 	// Symbols are the named parts of the text: the bar GoToSymbol opens
 	// finds one, and an app's own outline lists them. The app gives them,
 	// as the SemanticTokens.
-	Symbols []Symbol
-	minimapDrag    minimapDragState
+	Symbols     []Symbol
+	minimapDrag minimapDragState
 	// OnInput sees each input event before the editor, as keys for a
 	// mode of the app's such as Vim's: returning true takes it, and the
 	// editor leaves it. Text typed at the carets comes as InputText;
@@ -176,18 +186,22 @@ type State struct {
 	NoInputMethod bool
 
 	// RenderFindBar, RenderGoToLine, RenderPalette, RenderSymbols,
-	// RenderCompletions and RenderHover build the editor's find bar, go
-	// to line bar, command palette, go to symbol bar, completions and
-	// hovers in place of its own (DefaultFindBar, DefaultGoToLine,
-	// DefaultPalette, DefaultSymbols, DefaultCompletions and DefaultHover,
-	// which they can call to wrap them): each is given the element the
-	// editor places, as a toolbar over its top right corner or a list
-	// below the caret, to style and fill, and a handle to what the part
-	// shows and does.
+	// RenderSignature, RenderCompletions and RenderHover build the
+	// editor's find bar, go to line bar, command palette, go to symbol
+	// bar, signature card, completions and hovers in place of its own
+	// (DefaultFindBar, DefaultGoToLine, DefaultPalette, DefaultSymbols,
+	// DefaultSignature, DefaultCompletions and DefaultHover, which they
+	// can call to wrap them): each is given the element the editor
+	// places, as a toolbar over its top right corner or a list below the
+	// caret, to style and fill, and a handle to what the part shows and
+	// does.
 	RenderFindBar     func(c *ui.Context, bar ui.Element, f *FindBar)
 	RenderGoToLine    func(c *ui.Context, bar ui.Element, g *GoToLineBar)
 	RenderPalette     func(c *ui.Context, bar ui.Element, p *PaletteBar)
 	RenderSymbols     func(c *ui.Context, bar ui.Element, s *SymbolBar)
+	RenderSignature   func(c *ui.Context, card ui.Element, s *SignatureCard)
+	RenderActions     func(c *ui.Context, panel ui.Element, m *ActionMenu)
+	RenderRename      func(c *ui.Context, bar ui.Element, b *RenameBar)
 	RenderCompletions func(c *ui.Context, panel ui.Element, m *CompletionMenu)
 	RenderHover       func(c *ui.Context, panel ui.Element, h *HoverCard)
 
@@ -286,13 +300,16 @@ func (st *State) options() options {
 		keepScrollbars: st.KeepScrollbars, hideScrollbars: st.NoScrollbars, scrollbar: st.Scrollbar,
 		autoClose: !st.NoAutoClose, folding: !st.NoFolding, activeLine: !st.NoActiveLine, cursorShape: st.CursorShape, fitContent: st.FitContent,
 		placeholder: st.Placeholder, label: st.Label, theme: st.Theme, bindings: st.Bindings, snippets: st.Snippets, gutterMarks: st.GutterMarks,
-		backgrounds: st.LineBackgrounds, textBgs: st.TextBackgrounds, semantic: st.SemanticTokens, symbols: st.Symbols, diffBase: st.DiffBase, onCompletion: st.OnCompletion, onHover: st.OnHover, onDefinition: st.OnDefinition,
+		backgrounds: st.LineBackgrounds, textBgs: st.TextBackgrounds, semantic: st.SemanticTokens, symbols: st.Symbols, diffBase: st.DiffBase, onCompletion: st.OnCompletion, onHover: st.OnHover, onSignatureHelp: st.OnSignatureHelp, onCodeActions: st.OnCodeActions, onRename: st.OnRename, onDefinition: st.OnDefinition,
 		hoverDelay: st.HoverDelay, noPointerHover: st.NoPointerHover,
 		noDefinitionClick: st.NoDefinitionClick, noDefinitionLink: st.NoDefinitionLink,
 		onGutterClick: st.OnGutterClick, contextMenu: st.ContextMenu, onInput: st.OnInput, noInputMethod: st.NoInputMethod, minDigits: 3,
 		renderFindBar: st.RenderFindBar, renderGoToLine: st.RenderGoToLine,
 		renderPalette:     st.RenderPalette,
 		renderSymbols:     st.RenderSymbols,
+		renderSignature:   st.RenderSignature,
+		renderActions:     st.RenderActions,
+		renderRename:      st.RenderRename,
 		renderCompletions: st.RenderCompletions, renderHover: st.RenderHover,
 	}
 }
@@ -525,6 +542,16 @@ func (st *State) ShowHover(start, end int, text string, build func(c *ui.Context
 	if h.diags == nil {
 		h.diags = st.ed.diagnosticsAt(start)
 	}
+}
+
+// ShowSignatureHelp shows the signature of the call whose arguments
+// the caret is in: a card pointing at the range start to end, with text
+// in the editor's font and what build adds, as a language server's. It
+// goes on Escape, or when the caret leaves the range.
+func (st *State) ShowSignatureHelp(start, end int, text string, build func(c *ui.Context)) {
+	st.ensure()
+	st.ed.sync()
+	st.ed.showSignature(start, end, text, build)
 }
 
 // SetInlays shows inlay hints in the lines, as types and parameter

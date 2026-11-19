@@ -355,6 +355,55 @@ func (ed *editor) acceptCompletion() bool {
 	return true
 }
 
+// SignatureHelpRequest asks for the signature of the call whose
+// arguments the caret is in, as the text typed asks.
+type SignatureHelpRequest struct {
+	Offset  int
+	Version uint64
+}
+
+// signature is the card showing the signature of the call the caret is
+// in.
+type signature struct {
+	shown bool
+	// start and end are the call's range, which the caret stays in
+	// while the card shows.
+	start, end int
+	text       string
+	build      func(c *ui.Context)
+	asked      int // the offset a request was made for
+	focused    bool
+}
+
+func (s *signature) open() bool { return s.shown }
+
+func (s *signature) close() {
+	s.shown, s.build, s.text = false, nil, ""
+	s.start, s.end, s.asked = 0, 0, -1
+}
+
+// showSignature shows the signature of the call of the range start to
+// end, which the card points at.
+func (ed *editor) showSignature(start, end int, text string, build func(c *ui.Context)) {
+	ed.sig.shown = true
+	ed.sig.start, ed.sig.end = start, end
+	ed.sig.text, ed.sig.build = text, build
+	ed.sig.focused = false
+	ed.needsBuild = true
+}
+
+// requestSignature asks the app for the signature of the call the
+// newest caret is in.
+func (ed *editor) requestSignature() bool {
+	if ed.o.onSignatureHelp == nil {
+		return false
+	}
+	off := ed.primary().head
+	ed.sig.asked = off
+	ed.o.onSignatureHelp(SignatureHelpRequest{Offset: off, Version: ed.view.version})
+	return true
+}
+
 // hover is the popover of what the text under the pointer is, and
 // the diagnostics there.
 type hover struct {

@@ -356,8 +356,12 @@ func (ed *editor) tokenAt(off int) TokenKind {
 	return kindAt(l.toks, max(off-l.start-1, 0))
 }
 
-// afterTyping asks for completions as a word is typed.
+// afterTyping asks for completions as a word is typed, and for the
+// signature of a call as its arguments begin.
 func (ed *editor) afterTyping(t string) {
+	if r, _ := utf8.DecodeRuneInString(t); r == '(' || r == ',' {
+		ed.requestSignature()
+	}
 	if ed.o.onCompletion == nil {
 		return
 	}

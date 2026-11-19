@@ -78,6 +78,7 @@
   "currentLine": "Current line {line, number, ::group-off} of {lines, number, ::group-off}, column {column, number, ::group-off}",
   "completions": "Completions",
   "commandPalette": "Command palette",
+  "codeActions": "Code actions",
   "menuUndo": "Undo",
   "menuRedo": "Redo",
   "menuCut": "Cut",

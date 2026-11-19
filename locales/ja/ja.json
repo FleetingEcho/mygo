@@ -79,6 +79,7 @@
   "currentLine": "現在 {lines, number, ::group-off} 行中 {line, number, ::group-off} 行目、{column, number, ::group-off} 列目",
   "completions": "補完候補",
   "commandPalette": "コマンドパレット",
+  "codeActions": "コードアクション",
   "menuUndo": "取り消す",
   "menuRedo": "やり直す",
   "menuCut": "カット",

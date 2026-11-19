@@ -963,6 +963,254 @@ func (ed *editor) buildHover(c *ui.Context, anchor ui.Element) {
 	})
 }
 
+// SignatureCard is the signature of the call the caret is in, as
+// RenderSignature builds it.
+type SignatureCard struct {
+	c      *ui.Context
+	ed     *editor
+	anchor ui.Handle
+}
+
+// Anchor resolves the call's element in the current build. A custom
+// renderer can reattach a large card so it remains inside the window.
+// Like other build elements, it must not be retained after rendering.
+func (s *SignatureCard) Anchor() ui.Element { return s.c.Resolve(s.anchor) }
+
+// Text is the text ShowSignatureHelp gave, and Content builds what its
+// function builds, when it gave one.
+func (s *SignatureCard) Text() string { return s.ed.sig.text }
+
+func (s *SignatureCard) Content() {
+	if b := s.ed.sig.build; b != nil {
+		b(s.c)
+	}
+}
+
+// Range is the call's text, from start to end.
+func (s *SignatureCard) Range() (start, end int) { return s.ed.sig.start, s.ed.sig.end }
+
+// Font is the editor's font, and Theme its colors.
+func (s *SignatureCard) Font() ui.Font { return s.ed.view.font }
+func (s *SignatureCard) Theme() *Theme { return s.ed.theme }
+
+// DefaultSignature builds the editor's own signature card into panel:
+// the text in the editor's font and what the app builds, all of it
+// selectable.
+func DefaultSignature(c *ui.Context, panel ui.Element, s *SignatureCard) {
+	t := c.Theme()
+	ct := s.Theme()
+	panel.Background(t.Surface).Border(1, t.Border).Radius(t.Radius).Shadow(0, 4, 16, 0, ui.RGBA(0, 0, 0, 0.2)).
+		Padding(t.Space(1.5)).MaxWidth(t.Space(150)).Margin(0, 0, t.Space(1), 0).Selectable()
+	panel.Children(func() {
+		if text := s.Text(); text != "" {
+			ui.Text(c, text).Font(s.Font().Family).FontSize(s.Font().Size).TextColor(ct.Text)
+		}
+		s.Content()
+	})
+}
+
+// buildSignature places the signature of the call above its start,
+// above the window's content, and builds it.
+func (ed *editor) buildSignature(c *ui.Context, anchor ui.Element) {
+	s := &ed.sig
+	// The card goes when the caret leaves the call it shows.
+	if off := ed.primary().head; off < s.start || off > s.end {
+		s.close()
+		c.Invalidate()
+		return
+	}
+	ui.Overlay(c, func() {
+		panel := ui.Box(c).Key("code signature").AttachTo(anchor, ui.AnchorTopLeft, ui.AnchorBottomLeft).
+			Role(ui.RoleTooltip).HandleInput(shield)
+		s.focused = panel.FocusWithin()
+		if panel.Shortcut(0, ui.KeyEscape) {
+			s.close()
+			ed.refocus = true
+		}
+		render := ed.o.renderSignature
+		if render == nil {
+			render = DefaultSignature
+		}
+		card := &SignatureCard{c: c, ed: ed}
+		anchor = anchor.Bind(&card.anchor)
+		render(c, panel, card)
+	})
+}
+
+// ActionMenu is an editor's menu of what can be done to the text at the
+// caret, as RenderActions builds it: the CodeActions the app gave, and
+// the one chosen, which Enter or a click makes the edits of.
+type ActionMenu struct {
+	c  *ui.Context
+	ed *editor
+	// chosen and closing are what the menu was asked while it was built,
+	// done once it is, so that the rows after the one clicked still
+	// build: the action chosen, -1 for none.
+	chosen  int
+	closing bool
+}
+
+// Items are the actions shown.
+func (m *ActionMenu) Items() []CodeAction { return slices.Clone(m.ed.actions.actions) }
+
+// Selected is the index in Items of the action chosen.
+func (m *ActionMenu) Selected() int { return m.ed.actions.chosen }
+
+// Title is what the action i of Items is called.
+func (m *ActionMenu) Title(i int) string { return m.ed.actions.actions[i].Title }
+
+// Item makes the row of the action i of Items: selected while chosen,
+// scrolled into view as the arrows choose it, and making it when
+// clicked. Style it and build its content as the row of a list.
+func (m *ActionMenu) Item(i int) ui.Element {
+	a := &m.ed.actions
+	row := ui.ButtonBase(m.c).Key(i).FocusRing(false).Role(ui.RoleListItem).Label(m.Title(i)).Selected(i == a.chosen)
+	if i == a.chosen && a.scrollTo {
+		row.ScrollIntoView()
+	}
+	if row.Clicked() {
+		m.Choose(i)
+	}
+	return row
+}
+
+// Choose makes the edits of the action i of Items and closes the menu;
+// Close closes it without making one. Both happen once the menu is
+// built.
+func (m *ActionMenu) Choose(i int) {
+	if i >= 0 && i < len(m.ed.actions.actions) {
+		m.chosen = i
+	}
+}
+
+func (m *ActionMenu) Close() { m.closing = true }
+
+// Font is the editor's font, LineHeight the height of its lines, and
+// Theme its colors, to show the actions as the completions show theirs.
+func (m *ActionMenu) Font() ui.Font       { return m.ed.view.font }
+func (m *ActionMenu) LineHeight() float32 { return m.ed.view.lineHeight }
+func (m *ActionMenu) Theme() *Theme       { return m.ed.theme }
+
+// DefaultCodeActions builds the editor's own menu of what can be done
+// into panel: the title of each action, nine rows high.
+func DefaultCodeActions(c *ui.Context, panel ui.Element, m *ActionMenu) {
+	t := c.Theme()
+	font := m.Font()
+	lh := m.LineHeight()
+	panel.Background(t.Surface).Border(1, t.Border).Radius(t.Radius).Shadow(0, 4, 16, 0, ui.RGBA(0, 0, 0, 0.2)).
+		Padding(t.Space(1)).MaxHeight(lh*9 + t.Space(2)).MinWidth(t.Space(40)).MaxWidth(t.Space(150))
+	items := m.Items()
+	panel.Children(func() {
+		ui.Scroll(c).Key("rows").MaxHeight(lh * 9).Children(func() {
+			for i := range items {
+				if i >= maxListRows {
+					break
+				}
+				row := m.Item(i).Row().AlignItems(ui.Center).Padding(t.Space(0.5), t.Space(1.5)).
+					Radius(t.Radius - 2).Height(lh + 2)
+				if i == m.Selected() {
+					row.Background(t.Accent.Alpha(0.18))
+				}
+				row.Children(func() {
+					ui.Text(c, m.Title(i)).Font(font.Family).FontSize(font.Size).SingleLine().Shrink(1)
+				})
+			}
+		})
+	})
+}
+
+// buildCodeActions places the menu of what can be done at the caret,
+// above the window's content, and makes the edits of the one chosen.
+func (ed *editor) buildCodeActions(c *ui.Context, anchor ui.Element) {
+	a := &ed.actions
+	ui.Overlay(c, func() {
+		panel := ui.Box(c).Key("code actions").AttachTo(anchor, ui.AnchorBottomLeft, ui.AnchorTopLeft).
+			Role(ui.RoleList).Label(l10n.In(c.Locale()).CodeActions()).Cursor(ui.CursorDefault).KeepFocus().HandleInput(shield)
+		render := ed.o.renderActions
+		if render == nil {
+			render = DefaultCodeActions
+		}
+		m := &ActionMenu{c: c, ed: ed, chosen: -1}
+		render(c, panel, m)
+		switch {
+		case m.chosen >= 0 && m.chosen < len(a.actions):
+			act := a.actions[m.chosen]
+			a.close()
+			ed.applyEdits(act.Edits)
+			c.Invalidate()
+		case m.closing:
+			a.close()
+			c.Invalidate()
+		}
+	})
+	a.scrollTo = false
+}
+
+// RenameBar is an editor's bar renaming a name, as RenderRename builds
+// it: the new name typed over the old, which OnRename is asked about as
+// the bar is submitted.
+type RenameBar struct {
+	c  *ui.Context
+	ed *editor
+}
+
+// Text is the text of the bar's field, to bind an input to, with Input.
+func (b *RenameBar) Text() *string { return &b.ed.rename.text }
+
+// OldName is the name being renamed, and Range where it is in the text.
+func (b *RenameBar) OldName() string { return b.ed.rename.oldName }
+
+func (b *RenameBar) Range() (start, end int) { return b.ed.rename.start, b.ed.rename.end }
+
+// Input makes in the bar's field: it takes the focus with the old name
+// selected as the bar opens, Enter asks for the name typed, and Escape
+// closes the bar. It returns in.
+func (b *RenameBar) Input(in ui.Element) ui.Element {
+	r := &b.ed.rename
+	if r.focus {
+		r.focus = false
+		in.Focus().SetTextSelection(0, utf8.RuneCountInString(r.text))
+	}
+	switch {
+	case in.Submitted():
+		r.submit(b.ed)
+	case in.Shortcut(0, ui.KeyEscape):
+		b.Close()
+	}
+	return in
+}
+
+func (b *RenameBar) Close() { b.ed.rename.close(b.ed) }
+
+// DefaultRename builds the editor's own rename bar into bar: the field
+// of the new name.
+func DefaultRename(c *ui.Context, bar ui.Element, b *RenameBar) {
+	t := c.Theme()
+	tx := l10n.In(c.Locale())
+	bar.Row().Gap(t.Space(2)).AlignItems(ui.Center).Padding(t.Space(1.5), t.Space(2)).Background(t.Surface).
+		Border(1, t.Border).Radius(t.Radius).Shadow(0, 2, 8, 0, ui.RGBA(0, 0, 0, 0.18))
+	bar.Children(func() {
+		b.Input(ui.TextInputBase(c, b.Text()).Width(t.Space(40)).Padding(t.Space(1), t.Space(2)).Background(t.Background).
+			Border(1, t.Border).Radius(t.Radius - 2).Label(tx.Rename()).Placeholder(tx.RenameTo()))
+	})
+}
+
+// buildRename places the rename bar at the editor's top, above the
+// window's content.
+func (ed *editor) buildRename(c *ui.Context) {
+	t := c.Theme()
+	anchor := ui.Box(c).Key("code rename anchor").Absolute().Top(t.Space(1)).Left(0).Right(0).Height(0).PassThrough()
+	ui.Overlay(c, func() {
+		bar := ui.Box(c).Key("code rename").AttachTo(anchor, ui.AnchorBottom, ui.AnchorTop).
+			Role(ui.RoleDialog).Label(l10n.In(c.Locale()).Rename()).Cursor(ui.CursorDefault).HandleInput(shield)
+		render := ed.o.renderRename
+		if render == nil {
+			render = DefaultRename
+		}
+		render(c, bar, &RenameBar{c: c, ed: ed})
+	})
+}
+
 // shield takes no input, but keeps the presses on what an editor shows
 // over its text, as its find bar, from the editor around it: the input
 // goes to the innermost element taking it as it comes, which then leaves

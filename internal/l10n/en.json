@@ -400,6 +400,10 @@
   "@commandPalette": {
     "description": "Labels the code editor's bar that runs a command chosen from all of its commands."
   },
+  "codeActions": "Code actions",
+  "@codeActions": {
+    "description": "Labels the code editor's menu of what can be done to the text."
+  },
   "menuUndo": "Undo",
   "@menuUndo": {
     "description": "The label of the menu items of the role undo (MenuItem.Role)."

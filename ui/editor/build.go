@@ -149,13 +149,19 @@ func (ed *editor) build(c *ui.Context, buf *Buffer, o options) ui.Element {
 			}
 			return ui.Box(c).Key(key).Absolute().Left(ed.textX+cr.X-ed.scrollX).Top(float32(float64(cr.Y)-ed.scrollY)).Size(1, cr.H).PassThrough(), true
 		}
-		var caretAnchor, hoverAnchor ui.Element
-		var hasCaret, hasHover bool
+		var caretAnchor, hoverAnchor, sigAnchor, actionsAnchor ui.Element
+		var hasCaret, hasHover, hasSig, hasActions bool
 		if ed.completing() {
 			caretAnchor, hasCaret = anchor("code caret", ed.complete.at)
 		}
 		if h.shown {
 			hoverAnchor, hasHover = anchor("code hover anchor", h.start+(h.end-h.start)/2)
+		}
+		if ed.sig.shown {
+			sigAnchor, hasSig = anchor("code signature anchor", ed.sig.start)
+		}
+		if ed.acting() {
+			actionsAnchor, hasActions = anchor("code actions anchor", ed.actions.at)
 		}
 		ed.buildReplacements(c)
 		if ds, ok := ed.o.decor.(*diffSide); ok {
@@ -166,6 +172,12 @@ func (ed *editor) build(c *ui.Context, buf *Buffer, o options) ui.Element {
 		}
 		if hasCaret {
 			ed.buildCompletions(c, caretAnchor)
+		}
+		if hasSig {
+			ed.buildSignature(c, sigAnchor)
+		}
+		if hasActions {
+			ed.buildCodeActions(c, actionsAnchor)
 		}
 		if hasHover {
 			ed.buildHover(c, hoverAnchor)
@@ -206,6 +218,9 @@ func (ed *editor) buildBars(c *ui.Context) {
 	}
 	if ed.symbols.open {
 		ed.buildSymbols(c)
+	}
+	if ed.rename.open {
+		ed.buildRename(c)
 	}
 }
 
