@@ -36,3 +36,27 @@ func TestMinimapTopDragScrolls(t *testing.T) {
 		t.Fatal("dragging the highlight down did not scroll")
 	}
 }
+
+// A click below the last row of the minimap, where no code is, takes
+// the view to the end of the text and lights the rows that show it, as
+// VS Code's minimap.
+func TestMinimapClickBelowTheRowsGoesToTheEnd(t *testing.T) {
+	state := &State{Buffer: NewBuffer(strings.Repeat("value\n", 300))}
+	tester := ui.NewTester(func(c *ui.Context) {
+		ui.Row(c).Fill().Children(func() {
+			View(c, state).Grow(1).FillWidth().FillHeight()
+			Minimap(c, state).Width(86).FillHeight()
+		})
+	}, 400, 500)
+	tester.Frame()
+	tester.ClickAt(357, 490)
+	tester.Frame()
+	want := max(0, state.ed.view.heights.total()-float64(state.ed.viewH))
+	if state.ScrollY() != want {
+		t.Fatalf("the click took the view to %v, want the end at %v", state.ScrollY(), want)
+	}
+	_, last, _ := minimapBand(&state.ed, 76, state.Buffer.LineCount())
+	if last != 75 {
+		t.Fatalf("the end lights the rows through %d, want the last", last)
+	}
+}

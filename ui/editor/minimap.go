@@ -38,12 +38,13 @@ func Minimap(c *ui.Context, st *State) ui.Element {
 	theme := st.ed.theme
 	firstRow, lastRow, blankDIP := minimapBand(&st.ed, rows, lineCount)
 	var scratch []Token
-	return ui.Column(c).Padding(4, 5).Gap(0).AlignItems(ui.Stretch).Clip().
+	minimap := ui.Column(c).Padding(4, 5).Gap(0).AlignItems(ui.Stretch).Clip().
 		// The rows and the gaps between them take the drag alike: a press
 		// anywhere in the minimap scrolls the view.
 		HandleInput(func(ev ui.InputEvent) bool {
 			return st.minimapInput(ev, 0, rows)
-		}).Children(func() {
+		})
+	minimap.Children(func() {
 		for row := range rows {
 			line := row * lineCount / rows
 			text := buffer.Line(line)
@@ -88,11 +89,30 @@ func Minimap(c *ui.Context, st *State) ui.Element {
 				})
 			blank.Background(theme.Selection.Alpha(0.35))
 			if blank.Clicked() && !st.minimapDrag.moved {
-				st.SetScrollY(st.ed.scrollMax())
-				st.ed.services.Invalidate()
+				minimapGoToEnd(st)
 			}
 		}
 	})
+	// A click the rows do not take goes to the line its place stands
+	// for: those below the last one take the view to the end of the
+	// text, as VS Code's minimap, and highlight the rows that show it.
+	if minimap.Clicked() && !st.minimapDrag.moved {
+		row := int((st.minimapDrag.downY - 4) / minimapRowStep)
+		if row >= rows {
+			minimapGoToEnd(st)
+		} else if row >= 0 {
+			st.ScrollTo(row * lineCount / rows)
+			st.ed.services.Invalidate()
+		}
+	}
+	return minimap
+}
+
+// minimapGoToEnd takes the view to the end of the text, its last line
+// at the bottom of what it shows.
+func minimapGoToEnd(st *State) {
+	st.SetScrollY(max(0, st.ed.view.heights.total()-float64(st.ed.viewH)))
+	st.ed.services.Invalidate()
 }
 
 // minimapBand returns the rows of a minimap of rows rows that the
