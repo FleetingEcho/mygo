@@ -1,4 +1,4 @@
-//go:build darwin
+//go:build darwin && !ios
 
 package darwin
 
@@ -111,6 +111,18 @@ func TestOnScreen(handle uintptr) bool {
 	return sendInt(id(handle), "occlusionState")&occlusionStateVisible != 0
 }
 
+// TestOrderedIn reports whether a window is ordered in, as AppKit has it
+// at once, before the window server shows it (TestOnScreen).
+func TestOrderedIn(handle uintptr) bool {
+	return sendBool(id(handle), "isVisible")
+}
+
+// TestPerformClose closes a window as its close button does, which asks
+// the delegate first (performClose:).
+func TestPerformClose(handle uintptr) {
+	send(id(handle), "performClose:", 0)
+}
+
 // TestWindowOrder returns the app's windows on screen, panels too, front
 // to back.
 func TestWindowOrder() []uintptr {
@@ -189,6 +201,20 @@ func TestAppPress(handle uintptr, x, y float64, down bool) {
 // bar's items too. It reports false where the process may not post events
 // (Accessibility).
 func TestPostMouse(x, y float64, down bool) bool {
+	typ := uint32(2) // kCGEventLeftMouseUp
+	if down {
+		typ = 1 // kCGEventLeftMouseDown
+	}
+	return postMouse(x, y, typ)
+}
+
+// TestPostMouseMove moves the pointer to (x, y) on screen, as
+// TestPostMouse presses.
+func TestPostMouseMove(x, y float64) bool {
+	return postMouse(x, y, 5) // kCGEventMouseMoved
+}
+
+func postMouse(x, y float64, typ uint32) bool {
 	testPostOnce.Do(func() {
 		purego.RegisterLibFunc(&cgPreflightPostEventAccess, libCG, "CGPreflightPostEventAccess")
 		purego.RegisterLibFunc(&cgEventCreateMouseEvent, libCG, "CGEventCreateMouseEvent")
@@ -196,10 +222,6 @@ func TestPostMouse(x, y float64, down bool) bool {
 	})
 	if !cgPreflightPostEventAccess() {
 		return false
-	}
-	typ := uint32(2) // kCGEventLeftMouseUp
-	if down {
-		typ = 1 // kCGEventLeftMouseDown
 	}
 	ev := cgEventCreateMouseEvent(0, typ, NSPoint{x, y}, 0) // kCGMouseButtonLeft
 	if ev == 0 {
@@ -618,6 +640,55 @@ func TestSetWindowAppearance(handle uintptr, dark bool) {
 	withPool(func() {
 		send(id(handle), "setAppearance:", uintptr(send(class("NSAppearance"), "appearanceNamed:", uintptr(nsString(name)))))
 	})
+}
+
+// TestPopoverAppearance returns the explicit popover chrome appearance and
+// the effective appearances of its window/content, including the arrow's host.
+func TestPopoverAppearance(handle uintptr) (chrome, window, content string) {
+	w := theBackend.byNSWindow[id(handle)]
+	if w == nil || w.popover == 0 {
+		return
+	}
+	name := func(object id, property string) string {
+		a := send(object, property)
+		if a == 0 {
+			return ""
+		}
+		return goString(send(a, "bestMatchFromAppearancesWithNames:", uintptr(nsArray(nsString("NSAppearanceNameAqua"), nsString("NSAppearanceNameDarkAqua")))))
+	}
+	return name(w.popover, "appearance"), name(w.win, "effectiveAppearance"), name(w.view, "effectiveAppearance")
+}
+
+// TestPopover returns the NSPopover a popover flyout shows in, 0 for none.
+func TestPopover(handle uintptr) uintptr {
+	if w := theBackend.byNSWindow[id(handle)]; w != nil {
+		return uintptr(w.popover)
+	}
+	return 0
+}
+
+// TestPopoverClosing reports whether a closed flyout gave the NSPopover
+// back while it was still closing, and it has not finished (givePopover).
+func TestPopoverClosing(popover uintptr) bool {
+	return theBackend.closingPopovers[id(popover)]
+}
+
+// TestSetPopoverAnchorAppearance models a status item's contrast appearance,
+// which can differ from the application's own theme over desktop wallpaper.
+func TestSetPopoverAnchorAppearance(handle uintptr, dark bool) {
+	w := theBackend.byNSWindow[id(handle)]
+	if w == nil {
+		return
+	}
+	view, _, _ := w.popoverAnchor()
+	if view == 0 {
+		return
+	}
+	name := "NSAppearanceNameAqua"
+	if dark {
+		name = "NSAppearanceNameDarkAqua"
+	}
+	send(view, "setAppearance:", uintptr(send(class("NSAppearance"), "appearanceNamed:", uintptr(nsString(name)))))
 }
 
 // TestWebViewAttached reports whether a window's web view is in its view
@@ -1764,6 +1835,15 @@ func TestWindowPixels(handle uintptr) (img *image.RGBA, ok bool) {
 		copy(img.Pix[row*img.Stride:], full.Pix[full.PixOffset(r.Min.X, r.Min.Y+row):full.PixOffset(r.Max.X, r.Min.Y+row)])
 	}
 	return img, true
+}
+
+// TestPauseFrames has the surface of a window's native UI take its last
+// frame for one long past, as on a runner slow enough that a frame asked
+// for comes after a pause (RequestFrame), whatever the machine's speed.
+func TestPauseFrames(handle uintptr) {
+	if w := theBackend.byNSWindow[id(handle)]; w != nil && w.surface != nil {
+		w.surface.lastFrame = time.Time{}
+	}
 }
 
 // TestDrawablesTrimmed reports whether the GPU renderer of a window's

@@ -104,6 +104,7 @@ type Inlay struct {
 type completions struct {
 	shown    bool
 	at       int // where the word being completed starts
+	caret    int // where the caret after it is
 	items    []Completion
 	filtered []int
 	scores   []int
@@ -131,6 +132,19 @@ func (cc *completions) step(d int) {
 
 func (cc *completions) moved(cs []change) {
 	cc.at = mapOffset(cc.at, cs, biasLeft)
+	cc.caret = mapOffset(cc.caret, cs, biasRight)
+}
+
+// completing reports whether the completions are open, closing those
+// whose caret went elsewhere than by typing, as one a command adds on
+// another line: the word they complete is before it no more, and
+// accepting one would replace the text from the word to the caret.
+func (ed *editor) completing() bool {
+	cc := &ed.complete
+	if p := ed.primary(); cc.shown && (!p.empty() || p.head != cc.caret) {
+		cc.close()
+	}
+	return cc.open()
 }
 
 // wordStartBefore returns where the word before off starts.
@@ -164,6 +178,7 @@ func (ed *editor) requestCompletions(explicit bool) bool {
 		ed.complete.close()
 	}
 	if ed.complete.shown && ed.complete.at == start && len(ed.complete.items) > 0 {
+		ed.complete.caret = p.head
 		ed.complete.filter(prefix)
 		if len(ed.complete.filtered) > 0 || !explicit {
 			if len(ed.complete.filtered) == 0 {
@@ -172,7 +187,7 @@ func (ed *editor) requestCompletions(explicit bool) bool {
 			return true
 		}
 	}
-	ed.complete.at = start
+	ed.complete.at, ed.complete.caret = start, p.head
 	ed.complete.request = true
 	ed.complete.version = ed.view.version
 	ed.o.onCompletion(CompletionRequest{Offset: p.head, Prefix: prefix, Version: ed.view.version, Explicit: explicit})
@@ -191,7 +206,7 @@ func (ed *editor) showCompletions(at int, items []Completion) {
 	if at >= 0 && at <= p.head {
 		start = at
 	}
-	cc.shown, cc.at, cc.items, cc.request = true, start, items, false
+	cc.shown, cc.at, cc.caret, cc.items, cc.request = true, start, p.head, items, false
 	cc.filter(ed.slice(start, p.head))
 	if len(cc.filtered) == 0 {
 		cc.shown = false
@@ -445,6 +460,7 @@ func (ed *editor) setSuggestion(off int, text string) {
 		sortInlays(ed.view.inlays)
 	}
 	ed.view.lines.m = nil
+	ed.view.invalidateStyledLines()
 }
 
 func sortInlays(in []inlay) {

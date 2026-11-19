@@ -1,4 +1,4 @@
-//go:build !darwin && !linux && !windows
+//go:build !(darwin && !ios) && !(linux && !android) && !windows
 
 package pty
 
@@ -14,5 +14,6 @@ func (p *PTY) Resize(cols, rows, w, h int) error { return errors.ErrUnsupported 
 func (p *PTY) ClearScreen() error                { return nil }
 func (p *PTY) Pid() int                          { return 0 }
 func (p *PTY) HasChildProcess() bool             { return false }
+func (p *PTY) Foreground() int                   { return 0 }
 func (p *PTY) Close() error                      { return nil }
 func (p *PTY) Kill() error                       { return errors.ErrUnsupported }
