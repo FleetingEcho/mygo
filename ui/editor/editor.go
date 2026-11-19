@@ -184,6 +184,9 @@ type editor struct {
 	// element itself, out of view, does not paint.
 	laidW   float32
 	gutterW float32
+	// sticky is how much the scope headers pinned to the top of the text
+	// take of it, which its rows move down by (stickyHeight).
+	sticky float32
 	textX   float32
 	viewH   float32
 	// builtViewH is the viewH the view was last built with, which a

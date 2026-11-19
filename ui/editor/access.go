@@ -33,7 +33,7 @@ func (ed *editor) accessBox(top, height, y0, y1 float64) (platform.RectF, bool) 
 		return platform.RectF{}, false
 	}
 	return platform.RectF{
-		X: float64(ed.r.X + ed.gutterW), Y: float64(ed.r.Y) + top - ed.scrollY,
+		X: float64(ed.r.X + ed.gutterW), Y: float64(ed.r.Y) + top - ed.scrollY + float64(ed.sticky),
 		W: float64(max(ed.r.W-ed.gutterW, 0)), H: height,
 	}, true
 }

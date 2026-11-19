@@ -144,7 +144,7 @@ func commandEdits(c Command) bool {
 
 // toContent maps a point of the element to the content.
 func (ed *editor) toContent(x, y float32) (float32, float64) {
-	return x - ed.textX + ed.scrollX, float64(y) + ed.scrollY
+	return x - ed.textX + ed.scrollX, float64(y) + ed.scrollY - float64(ed.sticky)
 }
 
 // region is what part of the editor a point of it is over.
@@ -900,7 +900,7 @@ func (ed *editor) BoundsForRange(r ui.TextInputRange) (ui.Rect, ui.TextInputRang
 		return ui.Rect{}, r, false
 	}
 	x := ed.textX + cr.X - ed.scrollX
-	y := float32(float64(cr.Y) - ed.scrollY)
+	y := float32(float64(cr.Y) - ed.scrollY) + ed.sticky
 	if y+cr.H < 0 || y > ed.viewH {
 		return ui.Rect{}, r, false
 	}

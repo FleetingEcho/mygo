@@ -44,6 +44,63 @@ func bracketToken(k TokenKind) bool {
 	return k != TokenString && k != TokenComment && k != TokenRegexp && k != TokenEscape && k != TokenCode
 }
 
+// stickyRows is how many scope headers pin to the top of the view at
+// once, as VS Code's sticky scroll.
+const stickyRows = 5
+
+// bracketAt is one bracket found on a line.
+type bracketAt struct {
+	at   int
+	open bool
+}
+
+// scopeHeaders returns the lines whose brackets enclose the start of
+// line, innermost first: the headers of the scopes it is inside, which
+// stick to the top of the view as it scrolls into them.
+func (ed *editor) scopeHeaders(line int) []int {
+	v := &ed.view
+	opens, closes := ed.bracketPairs()
+	if opens == "" || v.depths.of(v, line, opens, closes) == 0 {
+		return nil
+	}
+	var headers []int
+	rel := 0
+	for i := line - 1; i >= 0 && len(headers) < stickyRows; i-- {
+		s := v.text.Line(i)
+		var brackets []bracketAt
+		walkBrackets(s, v.lineTokens(i, s), opens, closes, 0, func(at, _ int, open bool) {
+			brackets = append(brackets, bracketAt{at, open})
+		})
+		for j := len(brackets) - 1; j >= 0; j-- {
+			if !brackets[j].open {
+				rel++
+				continue
+			}
+			if rel > 0 {
+				rel--
+				continue
+			}
+			// The line is one header however many of its brackets open
+			// the scopes around the line asked of.
+			if n := len(headers); n == 0 || headers[n-1] != i {
+				headers = append(headers, i)
+			}
+		}
+	}
+	return headers
+}
+
+// stickyHeight is how much the scope headers pinned to the top of the
+// text take of it: those of the scopes the first line in view is inside.
+func (ed *editor) stickyHeight() float32 {
+	if ed.o.decor != nil {
+		// A diff's blocks and separators stand on the rows themselves.
+		return 0
+	}
+	line := ed.view.heights.lineAt(ed.scrollY)
+	return float32(len(ed.scopeHeaders(line))) * ed.view.lineHeight
+}
+
 // walkBrackets calls fn for each bracket of one line of code, outside
 // the tokens that are not code, with the depth of its pair: a closing
 // bracket takes its opener's. It returns the depth the line ends at,

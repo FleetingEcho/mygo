@@ -400,7 +400,7 @@ func (ed *editor) buildReplacements(c *ui.Context) {
 				continue
 			}
 			e := ui.Box(c).Key("replacement "+strconv.Itoa(p.start)).Absolute().
-				Left(ed.textX-ed.gutterW+p.rect.X-ed.scrollX).Top(float32(float64(p.rect.Y)-ed.scrollY)).
+				Left(ed.textX-ed.gutterW+p.rect.X-ed.scrollX).Top(float32(float64(p.rect.Y)-ed.scrollY) + ed.sticky).
 				Size(p.rect.W, p.rect.H)
 			if r.Label != "" {
 				// A picture of what the text says, or what holds the

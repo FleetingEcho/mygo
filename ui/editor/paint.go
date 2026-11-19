@@ -110,6 +110,9 @@ func (ed *editor) paint(p *ui.Painter, r ui.Rect) {
 	if ed.autoscroll() {
 		p.AnimationFrame()
 	}
+	// The scope headers pinned to the top take a band of the text, which
+	// its rows move down by.
+	ed.sticky = ed.stickyHeight()
 	ct := ed.theme
 	// The lines in view: those the window shows of the element, for an
 	// editor as high as its content.
@@ -164,6 +167,7 @@ func (ed *editor) paint(p *ui.Painter, r ui.Rect) {
 		ed.paintLines(p, r, &f)
 	})
 	ed.paintGutter(p, r, &f)
+	ed.paintSticky(p, r)
 	ed.paintScrollbars(p, r, &f)
 	if v.approx || more {
 		p.AnimationFrame()
@@ -282,7 +286,7 @@ func (ed *editor) paintLines(p *ui.Painter, r ui.Rect, f *frame) {
 	v := &ed.view
 	h := &v.heights
 	if ed.view.text.Len() == 0 && ed.o.placeholder != "" {
-		y := r.Y + float32(-ed.scrollY)
+		y := r.Y + float32(-ed.scrollY) + ed.sticky
 		l := v.shaped.get(ed.o.placeholder, v.style)
 		row := rowLayout{pieces: []rowPiece{{to: len(ed.o.placeholder), l: l, ascii: isASCII(ed.o.placeholder), width: l.Width}}, to: len(ed.o.placeholder)}
 		cl := &lineLayout{disp: ed.o.placeholder}
@@ -406,7 +410,7 @@ func (ed *editor) paintLine(p *ui.Painter, r ui.Rect, f *frame, line int, g line
 	v.colorsOf(l, &f.colors)
 	for ri := range l.rows {
 		row := &l.rows[ri]
-		y := r.Y + float32(g.rows-ed.scrollY) + float32(ri)*lh
+		y := r.Y + float32(g.rows-ed.scrollY) + float32(ri)*lh + ed.sticky
 		if y > p.Visible().Y+p.Visible().H || y+lh < p.Visible().Y {
 			continue
 		}
@@ -750,6 +754,31 @@ func squiggle(p *ui.Painter, x, y, w float32, c ui.Color) {
 	p.StrokePath(&path, 1, c)
 }
 
+// paintSticky draws the headers of the scopes the view is inside,
+// pinned to the top of the text over the rows scrolled under them, as
+// VS Code's sticky scroll.
+func (ed *editor) paintSticky(p *ui.Painter, r ui.Rect) {
+	if ed.sticky <= 0 {
+		return
+	}
+	v := &ed.view
+	ct := ed.theme
+	p.Fill(ui.Rect{X: r.X, Y: r.Y, W: r.W, H: ed.sticky}, ct.ActiveLine, 0)
+	ox := r.X + ed.textX - ed.scrollX
+	headers := ed.scopeHeaders(v.heights.lineAt(ed.scrollY))
+	for i := len(headers) - 1; i >= 0; i-- {
+		l := v.line(headers[i])
+		if len(l.rows) == 0 {
+			continue
+		}
+		y := r.Y + float32(len(headers)-1-i)*v.lineHeight
+		var cc runColors
+		v.colorsOf(l, &cc)
+		v.paintRow(p, l, &l.rows[0], ox, y, &cc, nil)
+	}
+	p.Stroke(ui.Rect{X: r.X, Y: r.Y + ed.sticky - 1, W: r.W, H: 1}, ct.IndentGuide, 1, 0)
+}
+
 // paintGutter draws the gutter: the numbers of lines, fold markers, the
 // marks of changes and the app's.
 func (ed *editor) paintGutter(p *ui.Painter, r ui.Rect, f *frame) {
@@ -777,7 +806,7 @@ func (ed *editor) paintGutter(p *ui.Painter, r ui.Rect, f *frame) {
 			if g.hidden {
 				continue
 			}
-			y := r.Y + float32(g.rows-ed.scrollY)
+			y := r.Y + float32(g.rows-ed.scrollY) + ed.sticky
 			rowsH := float32(g.below - g.rows)
 			// A styled line's number, mark and fold marker stand on the
 			// baseline of its first row, in the editor's font: in the band
