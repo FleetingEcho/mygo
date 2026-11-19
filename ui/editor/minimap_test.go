@@ -112,3 +112,29 @@ func TestMinimapCancelEndsDrag(t *testing.T) {
 		t.Fatalf("click after cancellation retained stale drag state: %v", state.ScrollY())
 	}
 }
+
+// The rows light from what the view shows now, and the blank that the
+// view scrolled into below the text's end lights its own block at the
+// bottom of the minimap, as VS Code's.
+func TestMinimapBandAtTheEndOfTheText(t *testing.T) {
+	ct := newEditorTest(t, "", strings.Repeat("line\n", 100))
+	ed := &ct.st.ed
+	rows := 10
+	ct.st.SetScrollY(0)
+	ct.tt.Frame()
+	first, last, blank := minimapBand(ed, rows, 100)
+	if first != 0 || last >= rows || blank != 0 {
+		t.Fatalf("at the top: rows %d..%d, blank %v", first, last, blank)
+	}
+	// Scrolled past the text's end, the last rows stay lit and the blank
+	// below the end lights its block.
+	ct.st.SetScrollY(ed.scrollMax())
+	ct.tt.Frame()
+	first, last, blank = minimapBand(ed, rows, 100)
+	if last != rows-1 {
+		t.Fatalf("at the end the rows are %d..%d, want the last rows", first, last)
+	}
+	if blank <= 0 {
+		t.Fatal("the blank below the text's end lights nothing")
+	}
+}

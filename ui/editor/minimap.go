@@ -36,7 +36,7 @@ func Minimap(c *ui.Context, st *State) ui.Element {
 	st.ed.view.advanceSyntax(lastSample+1, 250*time.Microsecond)
 	highlighter := st.ed.view.followHighlighter()
 	theme := st.ed.theme
-	first, last := st.VisibleLines()
+	firstRow, lastRow, blankDIP := minimapBand(&st.ed, rows, lineCount)
 	var scratch []Token
 	return ui.Column(c).Padding(4, 5).Gap(1).AlignItems(ui.Stretch).Clip().Children(func() {
 		for row := range rows {
@@ -60,14 +60,42 @@ func Minimap(c *ui.Context, st *State) ui.Element {
 						TextColor(theme.TokenColor(run.kind))
 				}
 			})
-			if line >= first && line <= last {
+			if row >= firstRow && row <= lastRow {
 				button.Background(theme.Selection.Alpha(0.35))
 			}
 			if button.Clicked() && !st.minimapDrag.moved {
 				st.ScrollTo(line)
+				// The rows light from what the view shows: another frame
+				// rebuilds them where the press left it.
+				st.ed.services.Invalidate()
 			}
 		}
+		if blankDIP > 0 {
+			// The blank the view scrolled into below the text's end
+			// lights its own block at the bottom, as VS Code's minimap.
+			ui.Box(c).FillWidth().Height(blankDIP).Background(theme.Selection.Alpha(0.35))
+		}
 	})
+}
+
+// minimapBand returns the rows of a minimap of rows rows that the
+// editor's view touches, and how tall the block that the blank below
+// the text's end lights under them is, in DIPs. It reads what the view
+// shows now, which a press on the minimap scrolls between frames,
+// rather than what its last frame showed.
+func minimapBand(ed *editor, rows, lineCount int) (firstRow, lastRow int, blankDIP float32) {
+	top := ed.scrollY
+	bottom := top + float64(ed.viewH)
+	total := ed.view.heights.total()
+	firstLine := ed.view.heights.lineAt(top)
+	lastLine := ed.view.heights.lineAt(max(bottom-1, top))
+	firstRow = min(rows-1, max(0, firstLine*rows/lineCount))
+	lastRow = min(rows-1, max(0, lastLine*rows/lineCount))
+	if blank := max(0, bottom-total); blank > 0 {
+		blankDIP = float32(blank / max(total, 1) * float64(rows*minimapRowStep))
+		blankDIP = max(min(blankDIP, float32(rows*minimapRowStep)), minimapRowStep)
+	}
+	return firstRow, lastRow, blankDIP
 }
 
 // minimapRun is one part of a Minimap line with the editor's token kind. Text
@@ -160,6 +188,7 @@ func (st *State) minimapInput(ev ui.InputEvent, line, rows int) bool {
 		offset := int(math.Round(float64(delta) * float64(lineCount) / float64(rows*minimapRowStep)))
 		target := max(0, min(lineCount-1, drag.downLine+offset))
 		st.ScrollTo(target)
+		st.ed.services.Invalidate()
 		return true
 	case ui.InputPointerUp:
 		active := st.minimapDrag.active
@@ -167,6 +196,7 @@ func (st *State) minimapInput(ev ui.InputEvent, line, rows int) bool {
 		return active
 	case ui.InputScroll:
 		st.SetScrollY(st.ScrollY() + float64(ev.DY))
+		st.ed.services.Invalidate()
 		return true
 	}
 	return false
