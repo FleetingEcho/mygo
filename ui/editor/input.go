@@ -209,6 +209,12 @@ func (ed *editor) pointerDown(ev ui.InputEvent) bool {
 		ed.toggleFoldLine(line)
 		return true
 	}
+	// An inlay that does something takes the click, as a blame's opening
+	// its commit, rather than placing the caret.
+	if in, ok := ed.inlayAt(cx, cy); ok && in.click != nil {
+		in.click()
+		return true
+	}
 	off := ed.offsetAt(cx, cy)
 	mods := ev.Mods
 	ed.endGroup()

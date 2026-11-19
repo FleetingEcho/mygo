@@ -102,6 +102,9 @@ type inlay struct {
 	text     string
 	kind     int // 0 a hint, 1 a suggestion, inlayNoNewline a diff's mark, inlayTrailing text at a line's end
 	ellipsis string
+	// click runs when the inlay is clicked, taking the click from the
+	// text (Inlay.Click).
+	click func()
 }
 
 // inlayNoNewline is the kind of inlay a diff marks the last line of a

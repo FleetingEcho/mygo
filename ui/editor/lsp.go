@@ -106,6 +106,9 @@ type Inlay struct {
 	// Ellipsis shortens trailing text to the room left on its last display
 	// row rather than wrapping it onto another row. Empty disables elision.
 	Ellipsis string
+	// Click runs when the inlay is clicked, which takes the click away
+	// from the text, as a blame's opening its commit.
+	Click func()
 }
 
 // completions is the list of completions the editor shows.
@@ -581,7 +584,7 @@ func (ed *editor) setInlays(hints []Inlay) {
 		if h.Trailing {
 			kind = inlayTrailing
 		}
-		ed.view.inlays = append(ed.view.inlays, inlay{at: h.Offset, text: h.Text, kind: kind, ellipsis: h.Ellipsis})
+		ed.view.inlays = append(ed.view.inlays, inlay{at: h.Offset, text: h.Text, kind: kind, ellipsis: h.Ellipsis, click: h.Click})
 	}
 	sortInlays(ed.view.inlays)
 	ed.view.lines.m = nil

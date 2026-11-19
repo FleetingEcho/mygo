@@ -575,22 +575,21 @@ func (ed *editor) offsetAt(x float32, y float64) int {
 	return l.start + l.fromDisp(d)
 }
 
-// overTrailingInlay reports whether a content point is on rendered trailing
-// decoration, rather than in the blank space after it. Such decoration keeps
-// the source caret before it, so caretRect alone cannot hit-test it.
-func (ed *editor) overTrailingInlay(x float32, y float64) bool {
+// inlayAt returns the inlay rendered at a content point: what its text
+// covers, as the decoration of a trailing inlay beyond the line's end.
+func (ed *editor) inlayAt(x float32, y float64) (inlay, bool) {
 	v := &ed.view
 	if v.text.LineCount() == 0 {
-		return false
+		return inlay{}, false
 	}
 	line := v.heights.lineAt(y)
 	if v.heights.isHidden(line) {
-		return false
+		return inlay{}, false
 	}
 	l := v.line(line)
 	inlays := v.inlaysIn(l.start, l.start+len(l.text))
 	for i, segment := range l.segs {
-		if segment.kind != segInlay || segment.inlay >= len(inlays) || inlays[segment.inlay].kind != inlayTrailing {
+		if segment.kind != segInlay || segment.inlay >= len(inlays) {
 			continue
 		}
 		end := segment.disp + segLen(l, i)
@@ -606,11 +605,19 @@ func (ed *editor) overTrailingInlay(x float32, y float64) bool {
 			}
 			left, right := v.xOf(l, row, from), v.xOf(l, row, to)
 			if x >= left && x < right {
-				return true
+				return inlays[segment.inlay], true
 			}
 		}
 	}
-	return false
+	return inlay{}, false
+}
+
+// overTrailingInlay reports whether a content point is on rendered trailing
+// decoration, rather than in the blank space after it. Such decoration keeps
+// the source caret before it, so caretRect alone cannot hit-test it.
+func (ed *editor) overTrailingInlay(x float32, y float64) bool {
+	in, ok := ed.inlayAt(x, y)
+	return ok && in.kind == inlayTrailing
 }
 
 // verticalMove returns where a caret at off with goal x goes moving rows
