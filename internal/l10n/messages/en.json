@@ -76,6 +76,7 @@
   "lineRange": "Line 1 to {lines, number, ::group-off}, then :column",
   "currentLine": "Current line {line, number, ::group-off} of {lines, number, ::group-off}, column {column, number, ::group-off}",
   "completions": "Completions",
+  "commandPalette": "Command palette",
   "menuUndo": "Undo",
   "menuRedo": "Redo",
   "menuCut": "Cut",

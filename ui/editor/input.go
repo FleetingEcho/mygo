@@ -76,6 +76,11 @@ func (ed *editor) dispatch(ev ui.InputEvent) bool {
 	case ui.InputPointerMove:
 		return ed.pointerMove(ev)
 	case ui.InputPointerUp:
+		if ed.gesture.active && ed.gesture.mode == 4 {
+			ed.dropDragged(ev)
+			ed.endGroup()
+			return true
+		}
 		if ed.gesture.active || ed.scrollbar.active {
 			ed.gesture.active = false
 			ed.scrollbar.active = false
@@ -256,6 +261,15 @@ func (ed *editor) pointerDown(ev ui.InputEvent) bool {
 			ed.gesture.origin.head = r.Len()
 		}
 	}
+	// A press inside the selection takes it to move the text elsewhere,
+	// as Zed's: the drag decides between that and a click, which puts the
+	// caret where the press lets go.
+	if ev.Clicks == 1 && mods == 0 && !ed.o.readOnly && len(ed.sels) == 1 && !ed.sels[0].empty() &&
+		off > ed.sels[0].start() && off < ed.sels[0].end() {
+		ed.gesture.mode = 4
+		ed.gesture.origin = ed.sels[0]
+		return true
+	}
 	ed.extendGesture(off)
 	return true
 }
@@ -297,6 +311,39 @@ func (ed *editor) linkAt(mods ui.Modifiers) [2]int {
 		return [2]int{}
 	}
 	return [2]int{a, z}
+}
+
+// dropDragged puts the selection the gesture was dragging where the
+// pointer let it go, moving the text there in one edit, or puts the
+// caret where a click inside the selection would.
+func (ed *editor) dropDragged(ev ui.InputEvent) {
+	g := ed.gesture
+	ed.gesture = gesture{}
+	r := &ed.view.text
+	cx, cy := ed.toContent(ev.X, ev.Y)
+	off := ed.offsetAt(cx, cy)
+	s := g.origin
+	if off > s.start() && off < s.end() {
+		ed.setSels([]sel{ed.newSel(off, off)}, revealNone)
+		return
+	}
+	a, z := s.start(), s.end()
+	text := r.Slice(a, z)
+	// One edit moves the text across the span from where it was to
+	// where it goes, undone as one step.
+	var e Edit
+	start := off
+	switch {
+	case off <= a:
+		e = Edit{Start: off, End: z, Text: text + r.Slice(off, a)}
+	default:
+		e = Edit{Start: a, End: off, Text: r.Slice(z, off) + text}
+		start = a + (off - z)
+	}
+	ed.apply([]Edit{e}, editOther, func(func(int, bias) int) []sel {
+		// The text moved keeps its selection where it landed.
+		return []sel{ed.newSel(start, start+len(text))}
+	})
 }
 
 // extendGesture extends the selection being dragged to off.
@@ -379,6 +426,10 @@ func (ed *editor) pointerMove(ev ui.InputEvent) bool {
 		cx, cy := ed.toContent(ev.X, ev.Y)
 		if ed.gesture.mode == 3 {
 			ed.columnSelect(cx, cy)
+			return true
+		}
+		if ed.gesture.mode == 4 {
+			// The text goes where the press lets it go.
 			return true
 		}
 		ed.extendGesture(ed.offsetAt(cx, cy))

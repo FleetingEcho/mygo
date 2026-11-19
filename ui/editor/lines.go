@@ -271,6 +271,107 @@ func (ed *editor) transpose() bool {
 	return ed.apply(edits, editOther, func(func(int, bias) int) []sel { return sels })
 }
 
+// reindentLines indents the lines of the selections anew as the
+// language says: one level more after a line opening one, where Return
+// puts a new line, and one level less for each closing bracket a line
+// starts with, or where the language's DecreaseIndent matches it.
+func (ed *editor) reindentLines() bool {
+	l := ed.language()
+	if l == nil {
+		return false
+	}
+	_, indenter := ed.highlighter().(Indenter)
+	if !indenter && l.IncreaseIndent == nil && l.DecreaseIndent == nil && len(l.Brackets) == 0 {
+		// Nothing says how the lines indent: leave them as they are.
+		return false
+	}
+	r := &ed.view.text
+	tab := ed.tabSize()
+	var edits []Edit
+	for _, sp := range ed.selLines() {
+		// want is the indentation wanted for prev, the last line above
+		// with text: of the lines before the span, what they have now.
+		want := ""
+		prev := sp.from - 1
+		for prev >= 0 && strings.TrimSpace(r.Line(prev)) == "" {
+			prev--
+		}
+		if prev >= 0 {
+			want = indentOf(r.Line(prev))
+		}
+		for line := sp.from; line <= sp.to; line++ {
+			s := r.Line(line)
+			if strings.TrimSpace(s) == "" {
+				continue
+			}
+			if prev >= 0 {
+				p := r.Line(prev)
+				for n := ed.indentAfter(r.LineEnd(prev), p); n > 0; n-- {
+					want += ed.indentUnit()
+				}
+				for n := ed.indentAfter(r.LineEnd(prev), p); n < 0; n++ {
+					want = outdentOnce(want, tab)
+				}
+			}
+			this := want
+			for n := ed.closers(line); n > 0; n-- {
+				this = outdentOnce(this, tab)
+			}
+			a := r.LineStart(line)
+			if cur := indentOf(s); cur != this {
+				edits = append(edits, Edit{Start: a, End: a + len(cur), Text: this})
+			}
+			want, prev = this, line
+		}
+	}
+	sels := slices.Clone(ed.sels)
+	return ed.apply(edits, editOther, func(move func(int, bias) int) []sel {
+		for i := range sels {
+			s := &sels[i]
+			if s.empty() {
+				s.collapse(move(s.head, biasRight))
+				continue
+			}
+			mv := func(off int) int {
+				if off == s.start() && off == r.LineStart(r.LineOf(off)) {
+					return move(off, biasLeft)
+				}
+				return move(off, biasRight)
+			}
+			s.anchor, s.head = mv(s.anchor), mv(s.head)
+		}
+		return sels
+	})
+}
+
+// closers counts the blocks a line closes at its start: the closing
+// brackets of the language it starts with, or one when its
+// DecreaseIndent matches it.
+func (ed *editor) closers(line int) int {
+	l := ed.language()
+	s := strings.TrimLeft(ed.view.text.Line(line), " \t")
+	n := 0
+	for s != "" {
+		closed := false
+		for _, p := range l.Brackets {
+			if p.Open == "<" || p.Close == "" || !strings.HasPrefix(s, p.Close) {
+				continue
+			}
+			s = s[len(p.Close):]
+			n++
+			closed = true
+			break
+		}
+		if !closed {
+			break
+		}
+	}
+	if n == 0 && l.DecreaseIndent != nil && l.DecreaseIndent.MatchString(ed.view.text.Line(line)) {
+		return 1
+	}
+	return n
+}
+
 // indentLines indents the lines of the selections a level, or outdents
 // them.
 func (ed *editor) indentLines(dir int) bool {

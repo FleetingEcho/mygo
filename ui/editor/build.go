@@ -201,6 +201,9 @@ func (ed *editor) buildBars(c *ui.Context) {
 	if ed.goTo.open {
 		ed.buildGoToLine(c)
 	}
+	if ed.palette.open {
+		ed.buildPalette(c)
+	}
 }
 
 // accessibility describes the editor to assistive technology, while it

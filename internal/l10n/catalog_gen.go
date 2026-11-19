@@ -1166,6 +1166,22 @@ func (msgs Messages) Completions() string {
 	return Catalog.Format(msgs.locale, "completions", nil)
 }
 
+// CommandPalette says "Command palette"
+// in the language the app shows.
+//
+// Labels the code editor's bar that runs a command chosen from all of its
+// commands.
+func CommandPalette() string { return In(i18n.Locale()).CommandPalette() }
+
+// CommandPalette says "Command palette"
+// in the language of msgs.
+//
+// Labels the code editor's bar that runs a command chosen from all of its
+// commands.
+func (msgs Messages) CommandPalette() string {
+	return Catalog.Format(msgs.locale, "commandPalette", nil)
+}
+
 // MenuUndo says "Undo"
 // in the language the app shows.
 //

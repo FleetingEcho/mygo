@@ -175,6 +175,42 @@ func (st *State) InsertSnippet(s *Snippet) bool {
 	})
 }
 
+// maxSnippetTrigger is how long a prefix of Snippets can be.
+const maxSnippetTrigger = 64
+
+// expandSnippetTrigger replaces the word before the caret with the
+// snippet the app gave its prefix in Snippets, and steps through its
+// fields: what Tab does where a snippet's prefix ends at the caret. It
+// reports whether one did.
+func (ed *editor) expandSnippetTrigger() bool {
+	if ed.o.readOnly || len(ed.o.snippets) == 0 || len(ed.sels) != 1 || !ed.sels[0].empty() {
+		return false
+	}
+	head := ed.sels[0].head
+	r := &ed.view.text
+	before := r.Slice(max(0, head-maxSnippetTrigger), head)
+	var found string
+	for prefix, s := range ed.o.snippets {
+		if s == nil || len(prefix) == 0 || len(prefix) > len(before) || len(prefix) <= len(found) {
+			continue
+		}
+		if !strings.HasSuffix(before, prefix) {
+			continue
+		}
+		// The prefix starts a word, or a run of its own symbols.
+		if start := head - len(prefix); start > 0 {
+			if c, _ := r.RuneBefore(start); isWordRune(c) && isWordRune(firstRune(prefix)) {
+				continue
+			}
+		}
+		found = prefix
+	}
+	if found == "" {
+		return false
+	}
+	return ed.insertSnippet(ed.o.snippets[found], []Edit{{Start: head - len(found), End: head}})
+}
+
 type snippetSession struct {
 	fields      []snippetField // in document order, including each insertion site
 	stops       []int

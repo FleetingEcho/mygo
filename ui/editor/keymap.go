@@ -86,6 +86,7 @@ const (
 	Transpose
 	Indent
 	Outdent
+	Reindent
 	Tab
 	Backtab
 	ToggleComment
@@ -128,6 +129,7 @@ const (
 	UseSelectionForFind
 	FindInSelection
 	// Going places.
+	CommandPalette
 	GoToLine
 	ScrollCursorCenter
 	ScrollLineUp
@@ -135,6 +137,9 @@ const (
 	GoToDefinition
 	ShowCompletions
 	ShowHover
+	// Diagnostics of the text.
+	NextDiagnostic
+	PreviousDiagnostic
 	// Changes against the DiffBase, or the hunks of a diff.
 	NextHunk
 	PreviousHunk
@@ -154,13 +159,14 @@ var commandNames = [...]string{
 	"undoSelection", "redoSelection", "splitSelectionIntoLines", "cancel",
 	"undo", "redo", "cut", "copy", "paste", "backspace", "delete", "deleteWordLeft", "deleteWordRight", "deleteSubwordLeft", "deleteSubwordRight",
 	"deleteToLineStart", "deleteToLineEnd", "cutToLineEnd", "deleteLine", "newline", "newlineAbove", "newlineBelow", "moveLinesUp", "moveLinesDown",
-	"duplicateLinesUp", "duplicateLinesDown", "duplicateSelection", "joinLines", "transpose", "indent", "outdent", "tab", "backtab",
+	"duplicateLinesUp", "duplicateLinesDown", "duplicateSelection", "joinLines", "transpose", "indent", "outdent", "reindent", "tab", "backtab",
 	"toggleComment", "toggleBlockComment", "sortLines", "sortLinesCaseInsensitive", "reverseLines", "uniqueLines",
 	"uppercase", "lowercase", "titleCase", "snakeCase", "kebabCase", "camelCase", "pascalCase", "trimTrailingWhitespace",
 	"fold", "unfold", "toggleFold", "foldAll", "unfoldAll", "foldRecursive", "unfoldRecursive", "foldSelection",
 	"foldLevel1", "foldLevel2", "foldLevel3", "foldLevel4", "foldLevel5", "foldLevel6", "foldLevel7", "foldLevel8", "foldLevel9",
 	"find", "findReplace", "findNext", "findPrevious", "useSelectionForFind", "findInSelection",
-	"goToLine", "scrollCursorCenter", "scrollLineUp", "scrollLineDown", "goToDefinition", "showCompletions", "showHover",
+	"commandPalette", "goToLine", "scrollCursorCenter", "scrollLineUp", "scrollLineDown", "goToDefinition", "showCompletions", "showHover",
+	"nextDiagnostic", "previousDiagnostic",
 	"nextHunk", "previousHunk", "revertHunk", "toggleSoftWrap", "toggleLineNumbers",
 }
 
@@ -261,10 +267,12 @@ func macCodeBindings() []Binding {
 		{cmd, ui.KeyF, 0, 0, Find}, {cmd | alt, ui.KeyF, 0, 0, FindReplace}, {cmd | sh, ui.KeyH, 0, 0, FindReplace},
 		{cmd, ui.KeyG, 0, 0, FindNext}, {cmd | sh, ui.KeyG, 0, 0, FindPrevious},
 		{cmd, ui.KeyE, 0, 0, UseSelectionForFind}, {cmd | alt, ui.KeyL, 0, 0, FindInSelection},
+		{cmd | sh, ui.KeyP, 0, 0, CommandPalette},
 		{ctrl, ui.KeyG, 0, 0, GoToLine}, {ctrl, ui.KeyL, 0, 0, ScrollCursorCenter},
 		{ctrl, ui.KeyPageUp, 0, 0, ScrollLineUp}, {ctrl, ui.KeyPageDown, 0, 0, ScrollLineDown},
 		{0, ui.KeyF12, 0, 0, GoToDefinition}, {ctrl, ui.KeySpace, 0, 0, ShowCompletions},
 		{cmd, ui.KeyK, cmd, ui.KeyI, ShowHover},
+		{0, ui.KeyF8, 0, 0, NextDiagnostic}, {sh, ui.KeyF8, 0, 0, PreviousDiagnostic},
 		{cmd, ui.KeyF8, 0, 0, NextHunk}, {cmd | sh, ui.KeyF8, 0, 0, PreviousHunk}, {cmd | alt, ui.KeyZ, 0, 0, RevertHunk},
 		{cmd, ui.KeyK, 0, ui.KeyZ, ToggleSoftWrap}, {cmd, ui.KeySemicolon, 0, 0, ToggleLineNumbers},
 	}
@@ -320,10 +328,12 @@ func pcCodeBindings() []Binding {
 		{ctrl, ui.KeyF, 0, 0, Find}, {ctrl, ui.KeyH, 0, 0, FindReplace},
 		{0, ui.KeyF3, 0, 0, FindNext}, {sh, ui.KeyF3, 0, 0, FindPrevious},
 		{ctrl, ui.KeyE, 0, 0, UseSelectionForFind}, {ctrl | alt, ui.KeyL, 0, 0, FindInSelection},
+		{ctrl | sh, ui.KeyP, 0, 0, CommandPalette},
 		{ctrl, ui.KeyG, 0, 0, GoToLine},
 		{ctrl, ui.KeyUp, 0, 0, ScrollLineUp}, {ctrl, ui.KeyDown, 0, 0, ScrollLineDown},
 		{0, ui.KeyF12, 0, 0, GoToDefinition}, {ctrl, ui.KeySpace, 0, 0, ShowCompletions},
 		{ctrl, ui.KeyK, ctrl, ui.KeyI, ShowHover},
+		{0, ui.KeyF8, 0, 0, NextDiagnostic}, {sh, ui.KeyF8, 0, 0, PreviousDiagnostic},
 		{alt, ui.KeyF5, 0, 0, NextHunk}, {alt | sh, ui.KeyF5, 0, 0, PreviousHunk}, {ctrl | alt, ui.KeyZ, 0, 0, RevertHunk},
 		{alt, ui.KeyZ, 0, 0, ToggleSoftWrap},
 	}

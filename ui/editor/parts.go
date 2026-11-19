@@ -1,6 +1,9 @@
 package editor
 
 import (
+	"slices"
+	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/egoist/mygo/internal/l10n"
@@ -8,12 +11,12 @@ import (
 )
 
 // The parts of an editor around its text: its find bar, its go to line
-// bar, its completions and its hovers. The editor places each, as an
-// element with the behavior the part needs, and a render function styles
-// and fills it, given a handle to what the part shows and does, as ui's
-// bases are styled: the State's (RenderFindBar and the others), else the
-// editor's own look (DefaultFindBar and the others), which an app's can
-// call to wrap.
+// bar, its command palette, its completions and its hovers. The editor
+// places each, as an element with the behavior the part needs, and a
+// render function styles and fills it, given a handle to what the part
+// shows and does, as ui's bases are styled: the State's (RenderFindBar
+// and the others), else the editor's own look (DefaultFindBar and the
+// others), which an app's can call to wrap.
 
 // FindBar is an editor's find bar, as RenderFindBar builds it: the query and
 // its options, which the matches follow as they change, and what the bar
@@ -357,6 +360,200 @@ func (ed *editor) buildGoToLine(c *ui.Context) {
 			ed.setScroll(float64(cr.Y) - float64(ed.viewH-ed.view.lineHeight)/2)
 		}
 	}
+}
+
+// PaletteBar is an editor's command palette, as RenderPalette builds it:
+// every command of the editor, fuzzy matched to the text typed, and the
+// one chosen, which Enter or a click runs.
+type PaletteBar struct {
+	c  *ui.Context
+	ed *editor
+	// chosen and closing are what the bar was asked while it was built,
+	// done once it is, so that the rows after the one clicked still
+	// build: the command chosen to run, -1 for none.
+	chosen  int
+	closing bool
+}
+
+// Text is the text of the bar's field, to bind an input to, with Input.
+func (p *PaletteBar) Text() *string { return &p.ed.palette.text }
+
+// Input makes in the bar's field: it takes the focus as the bar opens,
+// the arrows choose a command, Enter runs the one chosen, and Escape
+// closes the bar back to the editor. It returns in.
+func (p *PaletteBar) Input(in ui.Element) ui.Element {
+	pal := &p.ed.palette
+	if pal.focus {
+		pal.focus = false
+		in.Focus()
+	}
+	switch {
+	case in.Shortcut(0, ui.KeyDown):
+		pal.step(1)
+	case in.Shortcut(0, ui.KeyUp):
+		pal.step(-1)
+	case in.Submitted():
+		p.Choose(pal.chosen)
+	case in.Shortcut(0, ui.KeyEscape):
+		p.Close()
+	}
+	return in
+}
+
+// Items are the commands shown, best first: those the text typed
+// matches, or every command in its order while the text is empty.
+func (p *PaletteBar) Items() []Command { return slices.Clone(p.ed.palette.matches) }
+
+// Selected is the index in Items of the command chosen.
+func (p *PaletteBar) Selected() int { return p.ed.palette.chosen }
+
+// Command is the command of Items at i, and Name its name as the palette
+// lists it, as "Next diagnostic" for nextDiagnostic.
+func (p *PaletteBar) Command(i int) Command { return p.ed.palette.matches[i] }
+
+func (p *PaletteBar) Name(i int) string { return commandTitle(p.Command(i)) }
+
+// Shortcut is the key that runs the command, as menus show it, or "" for
+// none. The app's bindings come before the editor's own.
+func (p *PaletteBar) Shortcut(i int) string {
+	cmd := p.Command(i)
+	for _, list := range [][]Binding{p.ed.o.bindings, defaultCodeBindings()} {
+		for j := range list {
+			b := &list[j]
+			if b.Command != cmd {
+				continue
+			}
+			text := ui.ShortcutText(b.Mods, b.Key)
+			if b.ThenKey != 0 {
+				text += " " + ui.ShortcutText(b.ThenMods, b.ThenKey)
+			}
+			return text
+		}
+	}
+	return ""
+}
+
+// Item makes the row of the command i of Items: selected while chosen,
+// scrolled into view as the arrows choose it, and running it when
+// clicked. Style it and build its content as the row of a list.
+func (p *PaletteBar) Item(i int) ui.Element {
+	pal := &p.ed.palette
+	row := ui.ButtonBase(p.c).Key(i).FocusRing(false).Role(ui.RoleListItem).Label(p.Name(i)).Selected(i == pal.chosen)
+	if i == pal.chosen && pal.scrollTo {
+		row.ScrollIntoView()
+	}
+	if row.Clicked() {
+		p.Choose(i)
+	}
+	return row
+}
+
+// Choose runs the command i of Items and closes the bar; Close closes it
+// without running one. Both happen once the bar is built.
+func (p *PaletteBar) Choose(i int) {
+	if i >= 0 && i < len(p.ed.palette.matches) {
+		p.chosen = i
+	}
+}
+
+func (p *PaletteBar) Close() { p.closing = true }
+
+// Font is the editor's font, LineHeight the height of its lines, and
+// Theme its colors, to show the commands as the completions show theirs.
+func (p *PaletteBar) Font() ui.Font       { return p.ed.view.font }
+func (p *PaletteBar) LineHeight() float32 { return p.ed.view.lineHeight }
+func (p *PaletteBar) Theme() *Theme       { return p.ed.theme }
+
+// commandTitle writes a command's name as the palette lists it, as
+// "Next diagnostic" for nextDiagnostic.
+func commandTitle(c Command) string {
+	name := c.String()
+	var b strings.Builder
+	for i, r := range name {
+		if i > 0 && unicode.IsUpper(r) {
+			b.WriteByte(' ')
+		}
+		if i == 0 {
+			r = unicode.ToUpper(r)
+		} else {
+			r = unicode.ToLower(r)
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+
+// maxPaletteRows is how many commands the default palette shows.
+const maxPaletteRows = 200
+
+// DefaultPalette builds the editor's own command palette into bar, as
+// Zed's: the field matching commands as one types, and the list of them
+// below it, nine rows high, each with the key that runs it.
+func DefaultPalette(c *ui.Context, bar ui.Element, p *PaletteBar) {
+	t := c.Theme()
+	tx := l10n.In(c.Locale())
+	font := p.Font()
+	lh := p.LineHeight()
+	bar.Column().Gap(t.Space(1)).Padding(t.Space(1.5)).Background(t.Surface).
+		Border(1, t.Border).Radius(t.Radius).Shadow(0, 4, 16, 0, ui.RGBA(0, 0, 0, 0.18)).Width(t.Space(80))
+	bar.Children(func() {
+		p.Input(ui.TextInputBase(c, p.Text()).Padding(t.Space(1), t.Space(2)).Background(t.Background).
+			Border(1, t.Border).Radius(t.Radius - 2).Label(tx.CommandPalette()).Placeholder(tx.CommandPalette()).FocusRing(false))
+		items := p.Items()
+		if len(items) == 0 {
+			return
+		}
+		ui.Scroll(c).Key("rows").MaxHeight(lh * 9).Children(func() {
+			for i := range items {
+				if i >= maxPaletteRows {
+					break
+				}
+				row := p.Item(i).Row().Justify(ui.Start).Gap(t.Space(2)).AlignItems(ui.Center).Padding(t.Space(0.5), t.Space(1.5)).
+					Radius(t.Radius - 2).Height(lh + 2)
+				if i == p.Selected() {
+					row.Background(t.Accent.Alpha(0.18))
+				}
+				row.Children(func() {
+					ui.Text(c, p.Name(i)).Font(font.Family).FontSize(font.Size).SingleLine().Shrink(1)
+					if s := p.Shortcut(i); s != "" {
+						ui.Text(c, s).FontSize(font.Size - 1).TextColor(t.TextMuted).SingleLine().Shrink(1).Grow(1).TextAlign(ui.End)
+					}
+				})
+			}
+		})
+	})
+}
+
+// buildPalette places the command palette at the editor's top, above
+// the window's content, and runs the command chosen.
+func (ed *editor) buildPalette(c *ui.Context) {
+	pal := &ed.palette
+	if pal.queried != pal.text {
+		pal.search()
+	}
+	t := c.Theme()
+	anchor := ui.Box(c).Key("code palette anchor").Absolute().Top(t.Space(1)).Left(0).Right(0).Height(0).PassThrough()
+	ui.Overlay(c, func() {
+		bar := ui.Box(c).Key("code palette").AttachTo(anchor, ui.AnchorBottom, ui.AnchorTop).
+			Role(ui.RoleDialog).Label(l10n.In(c.Locale()).CommandPalette()).Cursor(ui.CursorDefault).HandleInput(shield)
+		render := ed.o.renderPalette
+		if render == nil {
+			render = DefaultPalette
+		}
+		p := &PaletteBar{c: c, ed: ed, chosen: -1}
+		render(c, bar, p)
+		switch {
+		case p.chosen >= 0 && p.chosen < len(pal.matches):
+			cmd := pal.matches[p.chosen]
+			pal.close(ed)
+			ed.run(cmd)
+			c.Invalidate()
+		case p.closing:
+			pal.close(ed)
+			c.Invalidate()
+		}
+	})
+	pal.scrollTo = false
 }
 
 // CompletionMenu is an editor's list of completions, as

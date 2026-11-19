@@ -24,6 +24,9 @@ type frame struct {
 	// texts are the app's text backgrounds in the lines in view.
 	texts       []TextBackground
 	occurrence  string
+	// occSkip is the range of the word at a caret, whose own occurrence
+	// leaves out what lights the others.
+	occSkip     [2]int
 	brackets    [2]Range
 	bracketsOK  bool
 	caretsOn    bool
@@ -194,9 +197,18 @@ func (ed *editor) prepare(f *frame) {
 		}
 	}
 	p := ed.primary()
-	if !p.empty() && p.end()-p.start() <= 200 && t.LineOf(p.start()) == t.LineOf(p.end()) {
+	switch {
+	case !p.empty() && p.end()-p.start() <= 200 && t.LineOf(p.start()) == t.LineOf(p.end()):
 		if s := t.Slice(p.start(), p.end()); strings.TrimSpace(s) != "" {
 			f.occurrence = s
+		}
+	case p.empty():
+		// A caret in a word lights its other occurrences, as a
+		// selection's does, leaving out the word itself.
+		if a, z := wordAt(*t, p.head, ed.wordChars()); a < z {
+			if s := t.Slice(a, z); strings.TrimSpace(s) != "" {
+				f.occurrence, f.occSkip = s, [2]int{a, z}
+			}
 		}
 	}
 	if p.empty() && len(ed.sels) == 1 {
@@ -424,7 +436,8 @@ func (ed *editor) paintLine(p *ui.Painter, r ui.Rect, f *frame, line int, g line
 				ed.fillRange(p, f, l, row, ox, y, l.toDisp(w.start, false), l.toDisp(w.end, false), style.word(ct, ed), 3)
 			}
 		}
-		// Matches of the find bar, and occurrences of the selection.
+		// Matches of the find bar, and occurrences of the selection or of
+		// the word at a caret.
 		for _, m := range f.matches {
 			if m.end < l.start || m.start > l.start+len(l.text) {
 				continue
@@ -444,6 +457,11 @@ func (ed *editor) paintLine(p *ui.Painter, r ui.Rect, f *frame, line int, g line
 				}
 				a := at + i
 				at = a + len(f.occurrence)
+				if l.start+a < f.occSkip[1] && l.start+at > f.occSkip[0] {
+					// The word at the caret lights the others, not
+					// itself.
+					continue
+				}
 				if isWholeWord(l.text, a, at, "") || !isWordRune(firstRune(f.occurrence)) {
 					ed.fillRange(p, f, l, row, ox, y, l.toDisp(a, false), l.toDisp(at, false), ct.Occurrence, 2)
 				}

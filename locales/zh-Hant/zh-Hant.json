@@ -77,6 +77,7 @@
   "lineRange": "第 1 到 {lines, number, ::group-off} 行，可加 :欄",
   "currentLine": "第 {line, number, ::group-off} 行，共 {lines, number, ::group-off} 行，第 {column, number, ::group-off} 欄",
   "completions": "自動完成",
+  "commandPalette": "命令面板",
   "menuUndo": "復原",
   "menuRedo": "重做",
   "menuCut": "剪下",

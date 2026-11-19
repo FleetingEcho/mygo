@@ -392,6 +392,10 @@
   "@completions": {
     "description": "Labels the code editor's list of completions."
   },
+  "commandPalette": "Command palette",
+  "@commandPalette": {
+    "description": "Labels the code editor's bar that runs a command chosen from all of its commands."
+  },
   "menuUndo": "Undo",
   "@menuUndo": {
     "description": "The label of the menu items of the role undo (MenuItem.Role)."

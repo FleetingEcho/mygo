@@ -95,6 +95,12 @@ type State struct {
 	// Bindings add key bindings, or replace the default ones for their
 	// keys (DefaultBindings).
 	Bindings []Binding
+	// Snippets are the app's snippets by the prefix that expands one
+	// where the caret follows it, as "for" for a loop: Tab replaces the
+	// prefix with the snippet and steps through its fields, as a
+	// completion's snippet does. Elsewhere Tab indents as it always
+	// does.
+	Snippets map[string]*Snippet
 	// DiffBase, when set, is the text the buffer's changes are shown
 	// against in the gutter, as the version of a file in Git: bars mark
 	// lines added and changed, and a mark where lines were deleted.
@@ -165,15 +171,17 @@ type State struct {
 	// off: there they compose in the text still.
 	NoInputMethod bool
 
-	// RenderFindBar, RenderGoToLine, RenderCompletions and RenderHover
-	// build the editor's find bar, go to line bar, completions and hovers
-	// in place of its own (DefaultFindBar, DefaultGoToLine,
-	// DefaultCompletions and DefaultHover, which they can call to wrap
-	// them): each is given the element the editor places, as a toolbar
-	// over its top right corner or a list below the caret, to style and
-	// fill, and a handle to what the part shows and does.
+	// RenderFindBar, RenderGoToLine, RenderPalette, RenderCompletions and
+	// RenderHover build the editor's find bar, go to line bar, command
+	// palette, completions and hovers in place of its own (DefaultFindBar,
+	// DefaultGoToLine, DefaultPalette, DefaultCompletions and DefaultHover,
+	// which they can call to wrap them): each is given the element the
+	// editor places, as a toolbar over its top right corner or a list
+	// below the caret, to style and fill, and a handle to what the part
+	// shows and does.
 	RenderFindBar     func(c *ui.Context, bar ui.Element, f *FindBar)
 	RenderGoToLine    func(c *ui.Context, bar ui.Element, g *GoToLineBar)
+	RenderPalette     func(c *ui.Context, bar ui.Element, p *PaletteBar)
 	RenderCompletions func(c *ui.Context, panel ui.Element, m *CompletionMenu)
 	RenderHover       func(c *ui.Context, panel ui.Element, h *HoverCard)
 
@@ -271,12 +279,13 @@ func (st *State) options() options {
 		scrollPastEnd: !st.NoScrollPastEnd && !st.FitContent, scrollMargin: scrollMargin,
 		keepScrollbars: st.KeepScrollbars, hideScrollbars: st.NoScrollbars, scrollbar: st.Scrollbar,
 		autoClose: !st.NoAutoClose, folding: !st.NoFolding, activeLine: !st.NoActiveLine, cursorShape: st.CursorShape, fitContent: st.FitContent,
-		placeholder: st.Placeholder, label: st.Label, theme: st.Theme, bindings: st.Bindings, gutterMarks: st.GutterMarks,
+		placeholder: st.Placeholder, label: st.Label, theme: st.Theme, bindings: st.Bindings, snippets: st.Snippets, gutterMarks: st.GutterMarks,
 		backgrounds: st.LineBackgrounds, textBgs: st.TextBackgrounds, semantic: st.SemanticTokens, diffBase: st.DiffBase, onCompletion: st.OnCompletion, onHover: st.OnHover, onDefinition: st.OnDefinition,
 		hoverDelay: st.HoverDelay, noPointerHover: st.NoPointerHover,
 		noDefinitionClick: st.NoDefinitionClick, noDefinitionLink: st.NoDefinitionLink,
 		onGutterClick: st.OnGutterClick, contextMenu: st.ContextMenu, onInput: st.OnInput, noInputMethod: st.NoInputMethod, minDigits: 3,
 		renderFindBar: st.RenderFindBar, renderGoToLine: st.RenderGoToLine,
+		renderPalette:     st.RenderPalette,
 		renderCompletions: st.RenderCompletions, renderHover: st.RenderHover,
 	}
 }

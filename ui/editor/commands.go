@@ -168,6 +168,8 @@ func (ed *editor) run(cmd Command) bool {
 			ed.complete.close()
 		case ed.hover.open():
 			ed.hover.close()
+		case ed.palette.open:
+			ed.palette.close(ed)
 		case ed.goTo.open:
 			ed.goTo.close(ed)
 		case ed.find.open:
@@ -274,6 +276,8 @@ func (ed *editor) run(cmd Command) bool {
 			return true
 		}
 		return ed.indentLines(-1)
+	case Reindent:
+		return ed.reindentLines()
 	case Tab:
 		if ed.completing() {
 			return ed.acceptCompletion()
@@ -282,6 +286,9 @@ func (ed *editor) run(cmd Command) bool {
 			return true
 		}
 		if ed.acceptSuggestion() {
+			return true
+		}
+		if ed.expandSnippetTrigger() {
 			return true
 		}
 		return ed.tab()
@@ -353,6 +360,9 @@ func (ed *editor) run(cmd Command) bool {
 		ed.find.scope = nil
 		ed.find.stale = true
 		return true
+	case CommandPalette:
+		ed.palette.show(ed)
+		return true
 	case GoToLine:
 		ed.goTo.show(ed)
 		return true
@@ -375,6 +385,8 @@ func (ed *editor) run(cmd Command) bool {
 	case ShowHover:
 		ed.hover.byPointer = false
 		return ed.requestHover(ed.primary().head)
+	case NextDiagnostic, PreviousDiagnostic:
+		return ed.gotoDiagnostic(direction(cmd == PreviousDiagnostic))
 	case NextHunk, PreviousHunk:
 		return ed.gotoHunk(direction(cmd == PreviousHunk))
 	case RevertHunk:

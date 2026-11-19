@@ -400,6 +400,41 @@ func (ed *editor) requestHover(off int) bool {
 	return ed.o.onHover != nil || len(ed.hover.diags) > 0
 }
 
+// gotoDiagnostic moves the caret to the next diagnostic after it (dir
+// 1) or the one before, wrapping around the ends of the text. The
+// diagnostics are those SetDiagnostics sorted by their start.
+func (ed *editor) gotoDiagnostic(dir int) bool {
+	if len(ed.diags) == 0 {
+		return false
+	}
+	head := ed.primary().head
+	target := -1
+	if dir > 0 {
+		for i, d := range ed.diags {
+			if d.Start > head {
+				target = i
+				break
+			}
+		}
+		if target < 0 {
+			target = 0
+		}
+	} else {
+		for i := len(ed.diags) - 1; i >= 0; i-- {
+			if ed.diags[i].Start < head {
+				target = i
+				break
+			}
+		}
+		if target < 0 {
+			target = len(ed.diags) - 1
+		}
+	}
+	d := ed.diags[target]
+	ed.setSels([]sel{ed.newSel(d.Start, d.Start)}, revealCenter)
+	return true
+}
+
 // diagnosticsAt returns the diagnostics holding off.
 func (ed *editor) diagnosticsAt(off int) []Diagnostic {
 	var out []Diagnostic

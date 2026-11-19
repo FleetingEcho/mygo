@@ -1035,6 +1035,11 @@ func accelerator(mods Modifiers, key Key) string {
 	return b.String()
 }
 
+// ShortcutText writes a key with modifiers as menus and shortcut lists
+// show it: with the symbols of macOS there, as "\u21e7\u2318Z", and as "Ctrl+Shift+Z"
+// elsewhere.
+func ShortcutText(mods Modifiers, key Key) string { return shortcutText(accelerator(mods, key)) }
+
 func keyName(k Key) string {
 	switch {
 	case k >= KeyA && k <= KeyZ:

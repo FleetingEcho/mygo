@@ -46,6 +46,7 @@ type options struct {
 	label         string
 	theme         *Theme
 	bindings      []Binding
+	snippets      map[string]*Snippet
 	gutterMarks   []GutterMark
 	backgrounds   []LineBackground
 	textBgs       []TextBackground
@@ -61,6 +62,7 @@ type options struct {
 	// The parts' render functions, nil for the editor's own.
 	renderFindBar     func(*ui.Context, ui.Element, *FindBar)
 	renderGoToLine    func(*ui.Context, ui.Element, *GoToLineBar)
+	renderPalette     func(*ui.Context, ui.Element, *PaletteBar)
 	renderCompletions func(*ui.Context, ui.Element, *CompletionMenu)
 	renderHover       func(*ui.Context, ui.Element, *HoverCard)
 	// decor shows a diff in the editor.
@@ -226,6 +228,7 @@ type editor struct {
 
 	find     finder
 	goTo     goToLine
+	palette  palette
 	complete completions
 	snippet  *snippetSession
 	hover    hover
@@ -270,7 +273,7 @@ const (
 
 type gesture struct {
 	active   bool
-	mode     int // 0 characters, 1 words, 2 lines, 3 columns
+	mode     int // 0 characters, 1 words, 2 lines, 3 columns, 4 text dragged to move it
 	origin   sel
 	add      bool // added to the selections, which keep the others
 	others   []sel
