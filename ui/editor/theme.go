@@ -17,6 +17,8 @@ type Theme struct {
 	ActiveLineNumber ui.Color
 	// ActiveLine highlights the lines with a caret.
 	ActiveLine ui.Color
+	// StickyBorder separates the pinned scope headers from the text.
+	StickyBorder ui.Color
 	// Selection highlights selected text while the editor has the focus,
 	// InactiveSelection while it does not.
 	Selection         ui.Color
@@ -69,6 +71,7 @@ func DefaultTheme(t *ui.Theme) *Theme {
 		Whitespace:  t.TextMuted.Alpha(0.45),
 	}
 	ct.ActiveLineNumber = t.Text
+	ct.StickyBorder = mixLab(t.Background, t.Text, 0.25)
 	ct.InactiveSelection = t.Selection.Alpha(0.55)
 	ct.ActiveIndentGuide = t.TextMuted.Alpha(0.6)
 	tok := func(k TokenKind, hex string) { ct.Tokens[k].Color = ui.Hex(hex) }
@@ -154,6 +157,7 @@ func (ct *Theme) resolve(t *ui.Theme) *Theme {
 	fill(&out.LineNumber, def.LineNumber)
 	fill(&out.ActiveLineNumber, def.ActiveLineNumber)
 	fill(&out.ActiveLine, def.ActiveLine)
+	fill(&out.StickyBorder, def.StickyBorder)
 	fill(&out.Selection, def.Selection)
 	fill(&out.InactiveSelection, def.InactiveSelection)
 	fill(&out.Cursor, def.Cursor)

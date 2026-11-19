@@ -764,6 +764,10 @@ func (ed *editor) paintSticky(p *ui.Painter, r ui.Rect) {
 	v := &ed.view
 	ct := ed.theme
 	band := ui.Rect{X: r.X, Y: r.Y, W: r.W, H: ed.sticky}
+	border := mixLab(ct.Background, ct.Text, 0.25)
+	if ct.StickyBorder != (ui.Color{}) {
+		border = ct.StickyBorder
+	}
 	// The headers are a surface over the text, not its active-line tint:
 	// the rows scrolled under them must not show through anywhere, gutter
 	// included.
@@ -785,7 +789,12 @@ func (ed *editor) paintSticky(p *ui.Painter, r ui.Rect) {
 			ed.paintStickyNumber(p, r, line, y, line == cur)
 		}
 	})
-	p.Stroke(ui.Rect{X: r.X, Y: r.Y + ed.sticky - 1, W: r.W, H: 1}, ct.IndentGuide, 1, 0)
+	// The strong lower edge separates the pinned surface from the text;
+	// a short, soft shadow below gives that edge a little depth.
+	p.Fill(ui.Rect{X: r.X, Y: r.Y + ed.sticky - 1, W: r.W, H: 1}, border, 0)
+	for i, alpha := range []float32{0.08, 0.04, 0.02} {
+		p.Fill(ui.Rect{X: r.X, Y: r.Y + ed.sticky + float32(i), W: r.W, H: 1}, ct.Text.Alpha(alpha), 0)
+	}
 }
 
 // paintStickyNumber draws a pinned header's own line number in the band,

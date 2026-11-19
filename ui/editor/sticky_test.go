@@ -106,3 +106,28 @@ func TestStickyBandIsOpaqueAndNumbersItsHeaders(t *testing.T) {
 		t.Fatal("the pinned headers have no line numbers")
 	}
 }
+
+// The separator is a visible opaque rule at the bottom of the band, not
+// the faint indent guide, with a short shadow beneath it.
+func TestStickyBorderSeparatesTheBand(t *testing.T) {
+	ct := newEditorTest(t, "go", "func a() {\n\tif x {\n\t\ty()\n\t\tz()\n\t}\n}\n")
+	ct.st.Theme = &Theme{Background: ui.RGB(255, 255, 255), StickyBorder: ui.RGB(0, 0, 255)}
+	ct.st.NoActiveLine = true
+	ct.tt.Frame()
+	ct.st.SetScrollY(float64(ct.st.ed.view.lineHeight) * 2)
+	ct.tt.Frame()
+	img := ct.tt.Image()
+	s := float32(img.Bounds().Dx()) / 600
+	at := func(y float32) (r, g, b uint8) {
+		c := img.RGBAAt(int(500*s), int(y*s))
+		return c.R, c.G, c.B
+	}
+	r, g, b := at(ct.st.ed.sticky - 1)
+	if b < 200 || r > 60 || g > 60 {
+		t.Fatalf("the band's bottom rule is (%d, %d, %d), want its visible border", r, g, b)
+	}
+	r, g, b = at(ct.st.ed.sticky + 1)
+	if r >= 250 || r != g || g != b {
+		t.Fatalf("the separator's shadow is (%d, %d, %d), want a light shade", r, g, b)
+	}
+}
