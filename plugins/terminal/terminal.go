@@ -869,6 +869,19 @@ func (t *Terminal) fire(ev events, title string) {
 	}
 }
 
+// HasForegroundProcess reports whether a local shell currently has another
+// process in the foreground, such as a script, build or interactive program.
+// It returns false for terminals backed only by Conn, whose remote process
+// state is not available locally.
+func (t *Terminal) HasForegroundProcess() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.closed || t.proc == nil || t.src == nil {
+		return false
+	}
+	return t.proc.HasChildProcess()
+}
+
 // ended marks the program ended, once its output did.
 func (t *Terminal) ended() {
 	t.closeSrc()

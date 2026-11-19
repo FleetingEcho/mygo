@@ -72,6 +72,9 @@ type ListState struct {
 	// which shows in the accent color. The list's Changed reports a new
 	// choice, and its Submitted a double click or Enter.
 	Selected *int
+	// RowHighlighted overrides presentation-only selection highlighting,
+	// without changing Selected, Selection, input, keyboard focus or menus.
+	RowHighlighted func(row int) bool
 	// Selection, when set, lets the user choose several rows, which it
 	// holds by their keys: a click chooses one, Cmd-click (Ctrl-click on
 	// Linux and Windows) adds a row or takes it out, and Shift-click
@@ -451,10 +454,10 @@ type listRow struct {
 // list, index and key, whether it was chosen before a click on it in this
 // frame, and whether it was double-clicked.
 type rowBuild struct {
-	f                       *listFrame
-	i                       int
-	key                     any
-	clicked, chosen, double bool
+	f                                    *listFrame
+	i                                    int
+	key                                  any
+	clicked, chosen, highlighted, double bool
 }
 
 // List creates a vertical scroll container of n rows, built with row(i),
@@ -737,9 +740,14 @@ func (f *listFrame) build(i int) *node {
 			w.flags |= flagDraggable // the moves of a press come as frames
 		}
 		rb.chosen = f.chosen(i, key)
+		rb.highlighted = rb.chosen
 		*valueBinding[listRowInput](w) = listRowInput{f: f, i: i}
 		w.onValueInput(listRowValueInput)
 		on := f.chosen(i, key)
+		if s.RowHighlighted != nil {
+			on = s.RowHighlighted(i)
+			rb.highlighted = on
+		}
 		if f.choosesCells() {
 			// Its cells in the block show the choice (Table); CellsStyle
 			// paints its row here, behind them.

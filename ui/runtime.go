@@ -134,6 +134,11 @@ type engine struct {
 	painter         Painter
 	glyphRun        glyphRun
 
+	// shortcutObserver is opt-in. Descriptions are collected only while an
+	// observer is installed and never outlive the frame or the runtime.
+	shortcutObserver    func(ShortcutEvent)
+	shortcutAnnotations map[shortcutAnnotationKey]ShortcutDescriptor
+
 	// fit sizes a window that takes its content's size (fit.go), nil
 	// for others.
 	fit *fitter
@@ -691,6 +696,7 @@ func (rt *engine) runFrame() {
 	// was built before it: build again, so the frame shows the outcome.
 	for pass := 0; pass < 3; pass++ {
 		rt.pass = pass
+		rt.shortcutAnnotations = nil
 		rt.consumed = false
 		if rt.zoomChanged {
 			// The view zoomed the content: this pass builds it at its new
@@ -1246,6 +1252,8 @@ func (rt *engine) close() {
 	rt.inputs = nil
 	rt.arena.rt = nil
 	rt.public.rt = nil
+	rt.shortcutObserver = nil
+	rt.shortcutAnnotations = nil
 	clear(rt.actions)
 	rt.actions = nil
 	rt.textInputClosed = true

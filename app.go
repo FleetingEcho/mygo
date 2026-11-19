@@ -245,7 +245,7 @@ func (a *Application) prepareQuit() bool {
 	if a.quitting {
 		return false
 	}
-	before := &QuitEvent{}
+	before := a.quitEvent()
 	fire1(&a.onBeforeQuit, before)
 	if before.prevented {
 		return false
@@ -257,7 +257,7 @@ func (a *Application) prepareQuit() bool {
 			return false
 		}
 	}
-	will := &QuitEvent{}
+	will := a.quitEvent()
 	fire1(&a.onWillQuit, will)
 	if will.prevented {
 		a.quitting = false
@@ -269,6 +269,17 @@ func (a *Application) prepareQuit() bool {
 	_ = Clipboard.Flush()
 	stopNativeCalls()
 	return true
+}
+
+// quitEvent lets prevented quits retry without restoring the obsolete
+// session-ending lifecycle. A relaunch retries a relaunch, going through
+// prepareQuit again so quit and window listeners can veto it as usual.
+func (a *Application) quitEvent() *QuitEvent {
+	retry := a.Quit
+	if a.relaunch {
+		retry = a.Relaunch
+	}
+	return &QuitEvent{retry: retry}
 }
 
 // finish runs once after the event loop has stopped.

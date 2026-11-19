@@ -123,6 +123,10 @@ type State struct {
 	// where they are as the text is edited: compute them again when the
 	// buffer's Version changes.
 	TextBackgrounds []TextBackground
+	// SemanticTokens optionally override syntax colors for byte ranges,
+	// using the editor's existing token palette.
+	SemanticTokens []SemanticToken
+	minimapDrag    minimapDragState
 	// OnInput sees each input event before the editor, as keys for a
 	// mode of the app's such as Vim's: returning true takes it, and the
 	// editor leaves it. Text typed at the carets comes as InputText;
@@ -223,6 +227,13 @@ type TextBackground struct {
 	Color      ui.Color
 }
 
+// SemanticToken colors bytes Start to End as Kind through the editor's
+// normal theme, so external semantic highlighting matches its lexer.
+type SemanticToken struct {
+	Start, End int
+	Kind       TokenKind
+}
+
 func (st *State) options() options {
 	return options{
 		readOnly: st.ReadOnly, font: st.Font, lineHeight: st.LineHeight, tabSize: st.TabSize, indent: st.Indent,
@@ -231,7 +242,7 @@ func (st *State) options() options {
 		keepScrollbars: st.KeepScrollbars, hideScrollbars: st.NoScrollbars,
 		autoClose: !st.NoAutoClose, folding: !st.NoFolding, activeLine: !st.NoActiveLine, cursorShape: st.CursorShape, fitContent: st.FitContent,
 		placeholder: st.Placeholder, label: st.Label, theme: st.Theme, bindings: st.Bindings, gutterMarks: st.GutterMarks,
-		backgrounds: st.LineBackgrounds, textBgs: st.TextBackgrounds, diffBase: st.DiffBase, onCompletion: st.OnCompletion, onHover: st.OnHover, onDefinition: st.OnDefinition,
+		backgrounds: st.LineBackgrounds, textBgs: st.TextBackgrounds, semantic: st.SemanticTokens, diffBase: st.DiffBase, onCompletion: st.OnCompletion, onHover: st.OnHover, onDefinition: st.OnDefinition,
 		hoverDelay: st.HoverDelay, noPointerHover: st.NoPointerHover,
 		onGutterClick: st.OnGutterClick, contextMenu: st.ContextMenu, onInput: st.OnInput, noInputMethod: st.NoInputMethod, minDigits: 3,
 		renderFindBar: st.RenderFindBar, renderGoToLine: st.RenderGoToLine,

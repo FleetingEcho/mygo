@@ -91,6 +91,16 @@ func (p *PTY) ClearScreen() error { return nil }
 // Pid returns the process's ID.
 func (p *PTY) Pid() int { return p.cmd.Process.Pid }
 
+// HasChildProcess reports whether another process is in this terminal's
+// foreground process group. Errors are deliberately conservative.
+func (p *PTY) HasChildProcess() bool {
+	var group int32
+	if ioctl(p.master, syscall.TIOCGPGRP, unsafe.Pointer(&group)) != nil || group == 0 {
+		return false
+	}
+	return int(group) != p.Pid()
+}
+
 // Close closes the terminal, which hangs up the processes that have it:
 // they get SIGHUP. It does not wait for them to exit.
 func (p *PTY) Close() error { return p.master.Close() }

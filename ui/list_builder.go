@@ -81,7 +81,7 @@ func (e Element) Rows(row func(ListRow)) Element {
 		}
 		selected := false
 		if n.c.row != nil {
-			selected = n.c.row.chosen
+			selected = n.c.row.highlighted
 		}
 		row(ListRow{Context: makeContext(n.c), Index: i, owner: e, selected: selected})
 	}, plainList)

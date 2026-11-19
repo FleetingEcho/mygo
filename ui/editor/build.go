@@ -30,6 +30,7 @@ func View(c *ui.Context, st *State) ui.Element {
 func (ed *editor) build(c *ui.Context, buf *Buffer, o options) ui.Element {
 	ed.texts = l10n.In(c.Locale())
 	ed.init(buf, o, c.Theme())
+	ed.view.semantic = o.semantic
 	ed.services = c.Services()
 	ed.builtViewH = ed.viewH
 	buf.watch(ed.services)
@@ -141,7 +142,7 @@ func (ed *editor) build(c *ui.Context, buf *Buffer, o options) ui.Element {
 			caretAnchor, hasCaret = anchor("code caret", ed.complete.at)
 		}
 		if h.shown {
-			hoverAnchor, hasHover = anchor("code hover anchor", h.start)
+			hoverAnchor, hasHover = anchor("code hover anchor", h.start+(h.end-h.start)/2)
 		}
 		if ds, ok := ed.o.decor.(*diffSide); ok {
 			ds.buildBlocks(c, ed)

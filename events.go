@@ -27,6 +27,15 @@ type CloseEvent struct {
 // Preventing it cancels the quit.
 type QuitEvent struct {
 	Preventable
+	retry func()
+}
+
+// Retry asks the application to quit again after an earlier quit was
+// prevented. It does nothing for a zero-value event.
+func (e *QuitEvent) Retry() {
+	if e.retry != nil {
+		e.retry()
+	}
 }
 
 // NavigateEvent is passed to Page.OnWillNavigate listeners. Preventing it

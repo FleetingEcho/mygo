@@ -205,6 +205,24 @@ var windowsBuild = sync.OnceValue(func() uint32 {
 // Pid returns the process's ID.
 func (p *PTY) Pid() int { return p.pid }
 
+// HasChildProcess reports whether the shell has a direct child process.
+// ConPTY has no foreground process group, so Windows uses its process table.
+func (p *PTY) HasChildProcess() bool {
+	snapshot, err := syscall.CreateToolhelp32Snapshot(syscall.TH32CS_SNAPPROCESS, 0)
+	if err != nil {
+		return false
+	}
+	defer syscall.CloseHandle(snapshot)
+	var entry syscall.ProcessEntry32
+	entry.Size = uint32(unsafe.Sizeof(entry))
+	for err := syscall.Process32First(snapshot, &entry); err == nil; err = syscall.Process32Next(snapshot, &entry) {
+		if entry.ParentProcessID == uint32(p.pid) && entry.ProcessID != uint32(p.pid) {
+			return true
+		}
+	}
+	return false
+}
+
 // Close closes the console, which ends the processes attached to it. Read
 // returns io.EOF once it wrote what it had.
 func (p *PTY) Close() error {
