@@ -22,8 +22,8 @@ type frame struct {
 	matches     []diffRange
 	current     diffRange
 	// texts are the app's text backgrounds in the lines in view.
-	texts       []TextBackground
-	occurrence  string
+	texts      []TextBackground
+	occurrence string
 	// occSkip is the range of the word at a caret, whose own occurrence
 	// leaves out what lights the others.
 	occSkip     [2]int
@@ -763,20 +763,52 @@ func (ed *editor) paintSticky(p *ui.Painter, r ui.Rect) {
 	}
 	v := &ed.view
 	ct := ed.theme
-	p.Fill(ui.Rect{X: r.X, Y: r.Y, W: r.W, H: ed.sticky}, ct.ActiveLine, 0)
-	ox := r.X + ed.textX - ed.scrollX
-	headers := ed.scopeHeaders(v.heights.lineAt(ed.scrollY))
-	for i := len(headers) - 1; i >= 0; i-- {
-		l := v.line(headers[i])
-		if len(l.rows) == 0 {
-			continue
+	band := ui.Rect{X: r.X, Y: r.Y, W: r.W, H: ed.sticky}
+	// The headers are a surface over the text, not its active-line tint:
+	// the rows scrolled under them must not show through anywhere, gutter
+	// included.
+	p.Fill(band, ct.Background, 0)
+	p.Clip(band, 0, func() {
+		ox := r.X + ed.textX - ed.scrollX
+		headers := ed.scopeHeaders(v.heights.lineAt(ed.scrollY))
+		cur := v.text.LineOf(ed.primary().head)
+		for i := len(headers) - 1; i >= 0; i-- {
+			line := headers[i]
+			l := v.line(line)
+			if len(l.rows) == 0 {
+				continue
+			}
+			y := r.Y + float32(len(headers)-1-i)*v.lineHeight
+			var cc runColors
+			v.colorsOf(l, &cc)
+			v.paintRow(p, l, &l.rows[0], ox, y, &cc, nil)
+			ed.paintStickyNumber(p, r, line, y, line == cur)
 		}
-		y := r.Y + float32(len(headers)-1-i)*v.lineHeight
-		var cc runColors
-		v.colorsOf(l, &cc)
-		v.paintRow(p, l, &l.rows[0], ox, y, &cc, nil)
-	}
+	})
 	p.Stroke(ui.Rect{X: r.X, Y: r.Y + ed.sticky - 1, W: r.W, H: 1}, ct.IndentGuide, 1, 0)
+}
+
+// paintStickyNumber draws a pinned header's own line number in the band,
+// which replaced the numbers the scroll would otherwise put there.
+func (ed *editor) paintStickyNumber(p *ui.Painter, r ui.Rect, line int, y float32, active bool) {
+	if ed.gutterW <= 0 || !ed.numbersOn() {
+		return
+	}
+	v := &ed.view
+	s := strconv.Itoa(line + 1)
+	lay := v.shaped.get(s, v.style)
+	row := rowLayout{pieces: []rowPiece{{to: len(s), l: lay, ascii: true, width: lay.Width}}, to: len(s)}
+	l := lineLayout{disp: s}
+	col := ed.theme.LineNumber
+	if active {
+		col = ed.theme.ActiveLineNumber
+	}
+	x := r.X + ed.gutterW - 4 - v.charWidth*0.5 - lay.Width
+	if ed.o.folding {
+		x -= v.lineHeight * 0.8
+	}
+	var cc runColors
+	v.paintRow(p, &l, &row, x, y, &cc, func(int, ui.Color) ui.Color { return col })
 }
 
 // paintGutter draws the gutter: the numbers of lines, fold markers, the
