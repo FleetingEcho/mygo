@@ -189,6 +189,14 @@ func (ed *editor) pointerDown(ev ui.InputEvent) bool {
 		}
 		return false
 	}
+	// A press on the scope headers pinned to the top of the text goes to
+	// their line, as VS Code's sticky scroll.
+	if ed.region != regionVScroll && ed.region != regionHScroll {
+		if line, ok := ed.stickyHeaderAt(ev.Y); ok {
+			ed.setScroll(ed.rowTop(line))
+			return true
+		}
+	}
 	switch ed.region {
 	case regionVScroll:
 		return ed.scrollbarPress(ev, false)

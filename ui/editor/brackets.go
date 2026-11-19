@@ -101,6 +101,21 @@ func (ed *editor) stickyHeight() float32 {
 	return float32(len(ed.scopeHeaders(line))) * ed.view.lineHeight
 }
 
+// stickyHeaderAt returns the line of the scope header pinned at y of the
+// text, if one is there: what a press on the pinned headers goes to.
+func (ed *editor) stickyHeaderAt(y float32) (int, bool) {
+	if ed.sticky <= 0 || y < 0 || y >= ed.sticky {
+		return 0, false
+	}
+	headers := ed.scopeHeaders(ed.view.heights.lineAt(ed.scrollY))
+	i := int(y / ed.view.lineHeight)
+	if i < 0 || i >= len(headers) {
+		return 0, false
+	}
+	// The innermost header is the lowest of the band.
+	return headers[len(headers)-1-i], true
+}
+
 // walkBrackets calls fn for each bracket of one line of code, outside
 // the tokens that are not code, with the depth of its pair: a closing
 // bracket takes its opener's. It returns the depth the line ends at,
