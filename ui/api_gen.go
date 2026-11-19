@@ -7119,6 +7119,25 @@ func (_handle Element) Row() Element {
 	return wrapElement(_node.Row())
 }
 
+// RowClicked reports, while a row of a List or a Table builds, that the
+// row was clicked with the pointer over this element. Unlike Clicked, it
+// leaves the click to the row too, so ordinary row selection still occurs.
+// Only primary-button clicks without modifiers qualify. The first click of
+// a double click is reported here; its second uses RowDoubleClicked.
+//
+// If the row was activated by the keyboard or assistive technology, with
+// no element under the pointer, the first element asking receives it. In a
+// list that does not choose its rows, asking makes the row take the click.
+func (_handle Element) RowClicked() bool {
+	_node := _handle.node()
+	if _node == nil {
+		return false
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return _node.RowClicked()
+}
+
 // RowCount tells assistive technology how many rows a table, grid or tree
 // grid of your own has, built or not, header rows included, as ARIA's
 // aria-rowcount: one that builds only the rows in view says how many it
@@ -7137,15 +7156,8 @@ func (_handle Element) RowCount(n int) Element {
 
 // RowDoubleClicked reports, while a row of a List or a Table builds, that
 // the row was double-clicked since the last frame with the pointer over the
-// element: a cell sees its row's double click this way and leaves the click
-// to the row, which chooses, where DoubleClicked would take it.
-//
-//	ui.Table(c, &app.list, cols, len(app.rows), func(row, col int) {
-//		cell := ui.Box(c).FillWidth().Children(func() { ui.Text(c, app.rows[row][col]) })
-//		if cell.RowDoubleClicked() {
-//			app.edit(row, col)
-//		}
-//	})
+// element. A cell sees its row's double click this way, leaving ordinary
+// clicks to the row's selection behavior.
 func (_handle Element) RowDoubleClicked() bool {
 	_node := _handle.node()
 	if _node == nil {

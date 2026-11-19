@@ -674,7 +674,11 @@ func (rt *engine) pointerUp(button, clicks int, canceled bool) {
 			if s.dragRec.dragged(rt, s) {
 				break // it moved the element (Draggable): no click
 			}
-			s.click(s.pressMods)
+			if clicks > 1 {
+				s.quietClick(s.pressMods)
+			} else {
+				s.click(s.pressMods)
+			}
 		case 1:
 			r.rightClicks++
 		}
@@ -699,11 +703,12 @@ func (rt *engine) applyRelease(s *state) {
 	s.pressed = rt.pressed == s
 	s.released, s.canceled = r.released, r.canceled
 	s.clicks += r.clicks
+	s.quietClicks += r.quietClicks
 	s.rightClicks += r.rightClicks
 	if r.clicks > 0 {
 		s.clickMods = r.clickMods
 	}
-	r.due, r.canceled, r.clicks, r.rightClicks = false, false, 0, 0
+	r.due, r.canceled, r.clicks, r.quietClicks, r.rightClicks = false, false, 0, 0, 0
 	if rt.pressEnded == s {
 		rt.pressEnded = nil
 	}
@@ -720,6 +725,18 @@ func (s *state) click(mods Modifiers) {
 	}
 	s.clicks++
 	s.clickMods = mods
+}
+
+// quietClick records a click without reporting it as one of its row's
+// single clicks: later clicks of a double or triple click, and assistive
+// technology's focus choosing a row.
+func (s *state) quietClick(mods Modifiers) {
+	if r := &s.releaseLater; r.due {
+		r.quietClicks++
+	} else {
+		s.quietClicks++
+	}
+	s.click(mods)
 }
 
 func (rt *engine) scroll(dx, dy float32, mods Modifiers, precise, momentum bool) {

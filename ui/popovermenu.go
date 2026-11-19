@@ -99,6 +99,7 @@ func (e *node) PopoverMenuButton(build func(m *Menu), options ...PopoverMenuButt
 	if e.role == RoleAuto || e.role == RoleButton {
 		e.role = RoleMenuButton
 	}
+	e.opensMenu()
 	rt := e.c.rt
 	var synced *bool
 	if o.Open != nil && e.hasState() {

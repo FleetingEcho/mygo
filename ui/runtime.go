@@ -354,6 +354,9 @@ type engine struct {
 	listDrag    func(rt *engine)
 	cellClick   func(f *listFrame, x, y float32, mods Modifiers)
 	cellInBlock func(f *listFrame, x, y float32) bool
+	// listEnds are lists whose EndReached callbacks run after a layout.
+	listEnds      []*ListState
+	reachListEnds func(rt *engine)
 	// pressDragger is the element around the one pressed that drags a
 	// value, which takes the press as it moves (dragMove), or 0.
 	pressDragger uint64
@@ -834,6 +837,9 @@ func (rt *engine) runFrame() {
 		h.announced = append(h.announced, rt.announcements...)
 	}
 	rt.announcements = rt.announcements[:0]
+	if len(rt.listEnds) > 0 {
+		rt.reachListEnds(rt)
+	}
 	rt.next()
 	if len(rt.retried) > 0 || len(rt.keys) > 0 {
 		// The keys retried, and those waiting for an element that took
@@ -1085,7 +1091,7 @@ func (rt *engine) forgetInput() {
 		if s.seen != rt.frame || s.pass != rt.pass {
 			continue
 		}
-		s.clicks, s.rightClicks, s.doubleClicks = 0, 0, 0
+		s.clicks, s.quietClicks, s.rightClicks, s.doubleClicks = 0, 0, 0, 0
 		s.pressPending = false
 		s.dragX, s.dragY = 0, 0
 		s.released, s.canceled = false, false
@@ -1252,6 +1258,7 @@ func (rt *engine) close() {
 	rt.inputs = nil
 	rt.arena.rt = nil
 	rt.public.rt = nil
+	rt.listEnds, rt.reachListEnds = nil, nil
 	rt.shortcutObserver = nil
 	rt.shortcutAnnotations = nil
 	clear(rt.actions)

@@ -371,6 +371,14 @@ func (ed *editor) pointerMove(ev ui.InputEvent) bool {
 			off = -1
 		}
 	}
+	if off < 0 && ed.regionAt(ev.X, ev.Y) == regionText {
+		// Trailing inlays are the exception: their caret deliberately stays
+		// before them, but their rendered text is still a hover target. Not a
+		// link's, which would underline the line's last word.
+		if cx, cy := ed.toContent(ev.X, ev.Y); ed.overTrailingInlay(cx, float64(cy)) {
+			off = ed.offsetAt(cx, cy)
+		}
+	}
 	if off < 0 {
 		// Off the text, nothing rests.
 		h.pending, h.restOff = false, -1

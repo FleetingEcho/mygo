@@ -72,10 +72,14 @@ type view struct {
 // inlay is text shown in a line at an offset, as an inlay hint or a
 // suggestion.
 type inlay struct {
-	at   int
-	text string
-	kind int // 0 a hint, 1 a suggestion
+	at       int
+	text     string
+	kind     int // 0 a hint, 1 a suggestion, inlayTrailing text at a line's end
+	ellipsis string
 }
+
+// inlayTrailing is the kind of inlay set with Inlay.Trailing.
+const inlayTrailing = 3
 
 // lineLayout is a line laid out for display.
 type lineLayout struct {
@@ -144,6 +148,12 @@ type faceRun struct {
 type lineCache struct {
 	m     map[int]*lineLayout
 	frame uint64
+}
+
+// invalidateStyledLines drops cached line displays after semantic tokens or
+// inlay visibility changes, which are not text buffer revisions.
+func (v *view) invalidateStyledLines() {
+	v.lines = lineCache{}
 }
 
 // shapeCache keeps the layouts of row texts two frames, as GPUI's
@@ -512,6 +522,7 @@ func (v *view) line(n int) *lineLayout {
 	l.text = v.text.Slice(l.start, v.text.LineEnd(n))
 	l.toks, l.exact = v.tokens(n, l.text, nil)
 	v.display(l)
+	v.ellipsizeTrailing(l)
 	if v.styled {
 		v.faceScratch = v.facesOf(l, v.faceScratch[:0])
 		if len(v.faceScratch) > 0 {
@@ -778,6 +789,58 @@ func (l *lineLayout) fromDisp(d int) int {
 		return s.from
 	}
 	return s.from
+}
+
+// ellipsizeTrailing shortens marked text at the end of a line to the room
+// left on the source text's last display row. Only the layout is shortened;
+// the inlay and source buffer retain their complete text.
+func (v *view) ellipsizeTrailing(l *lineLayout) {
+	if !v.wrap || v.wrapWidth <= 0 || len(l.segs) == 0 {
+		return
+	}
+	segment := l.segs[len(l.segs)-1]
+	if segment.kind != segInlay {
+		return
+	}
+	inlays := v.inlaysIn(l.start, l.start+len(l.text))
+	if segment.inlay >= len(inlays) {
+		return
+	}
+	inlay := inlays[segment.inlay]
+	if inlay.kind != inlayTrailing || inlay.ellipsis == "" {
+		return
+	}
+	displayed := l.disp
+	prefix, trailing := displayed[:segment.disp], displayed[segment.disp:]
+	// Replacements can be inline objects with an application-provided width.
+	// Measure their real faces before the normal face pass below shortens l.
+	faces := v.facesOf(l, nil)
+	breaks := v.wrapBreaks(prefix, faces)
+	start, indent := 0, float32(0)
+	if len(breaks) > 0 {
+		start = breaks[len(breaks)-1]
+		indent = v.wrapIndent(prefix)
+	}
+	used := indent + v.runsWidth(displayed, faces, start, segment.disp)
+	trailingWidth := func(end int) float32 {
+		return v.runsWidth(displayed, faces, segment.disp, segment.disp+end)
+	}
+	if used+trailingWidth(len(trailing)) <= v.wrapWidth {
+		return
+	}
+	ellipsisWidth := v.shaped.get(inlay.ellipsis, v.style).Width
+	if ellipsisWidth > v.wrapWidth-used {
+		l.disp = prefix
+		l.segs = l.segs[:len(l.segs)-1]
+		return
+	}
+	cut := 0
+	for index := range trailing {
+		if index > 0 && used+trailingWidth(index)+ellipsisWidth <= v.wrapWidth {
+			cut = index
+		}
+	}
+	l.disp = prefix + trailing[:cut] + inlay.ellipsis
 }
 
 // layoutRows wraps the displayed text of l into rows and shapes them.

@@ -494,8 +494,16 @@ const (
 // element ("pop-up button", "menu button") and offer to open it.
 // PopupNone takes it back.
 func (e *node) HasPopup(kind Popup) *node {
-	e.hasPopup = kind
+	e.hasPopup, e.popupSet = kind, true
 	return e
+}
+
+// opensMenu gives assistive technology a menu popup by default, without
+// overriding an explicit HasPopup choice.
+func (e *node) opensMenu() {
+	if !e.popupSet {
+		e.hasPopup = PopupMenu
+	}
 }
 
 // SortDirection is the order a table's rows are sorted in by a column
@@ -1099,8 +1107,8 @@ func (rt *engine) accessAction(ev platform.SurfaceEvent) {
 		}
 		if s.flags&flagChoosable != 0 {
 			// A row of a list choosing rows: its list takes the focus for
-			// it, choosing it.
-			s.click(0)
+			// it, choosing it, as the keys would, which no RowClicked reports.
+			s.quietClick(0)
 			break
 		}
 		rt.focusOn(s)
@@ -1110,7 +1118,7 @@ func (rt *engine) accessAction(ev platform.SurfaceEvent) {
 		for row := s; row != nil; row = rt.states[row.parent] {
 			if l := rt.states[row.parent]; l != nil && l.list != nil {
 				if r, ok := l.list.rows[row.id]; ok {
-					l.list.ScrollIntoView(r.row)
+					l.list.reveal(r.row)
 				}
 			}
 			if row.parent == 0 {

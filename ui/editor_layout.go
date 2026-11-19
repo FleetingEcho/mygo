@@ -171,8 +171,13 @@ func (e *node) paintInput(p *Painter) {
 		if ed.placeholderColorSet {
 			color = ed.placeholderColor
 		}
-		// The placeholder aligns itself in the content box, as its layout has the box's width.
-		p.textLayout(pl, e.x+e.contentX(), oy, color, ts, nil)
+		// Match a CJK fallback font's baseline with the active content instead
+		// of incorrectly sharing the empty editor's top-origin.
+		y := oy
+		if ed.area == nil && l != nil && len(l.Lines) > 0 && len(pl.Lines) > 0 {
+			y += l.Lines[0].Baseline - pl.Lines[0].Baseline
+		}
+		p.textLayout(pl, e.x+e.contentX(), y, color, ts, nil)
 	}
 	if ed.area != nil {
 		ed.area.paint(e, p, e.x+ed.originX, e.y+ed.originY)
