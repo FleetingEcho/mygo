@@ -74,6 +74,7 @@
   "replaceAll": "全部替换",
   "close": "关闭",
   "goToLine": "转到行",
+  "goToSymbol": "转到符号",
   "lineRange": "第 1 到 {lines, number, ::group-off} 行，可加 :列",
   "currentLine": "第 {line, number, ::group-off} 行，共 {lines, number, ::group-off} 行，第 {column, number, ::group-off} 列",
   "completions": "补全",

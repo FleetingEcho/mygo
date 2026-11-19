@@ -1122,6 +1122,20 @@ func (msgs Messages) GoToLine() string {
 	return Catalog.Format(msgs.locale, "goToLine", nil)
 }
 
+// GoToSymbol says "Go to symbol"
+// in the language the app shows.
+//
+// Labels the bar that goes to a symbol of the text.
+func GoToSymbol() string { return In(i18n.Locale()).GoToSymbol() }
+
+// GoToSymbol says "Go to symbol"
+// in the language of msgs.
+//
+// Labels the bar that goes to a symbol of the text.
+func (msgs Messages) GoToSymbol() string {
+	return Catalog.Format(msgs.locale, "goToSymbol", nil)
+}
+
 // LineRange says "Line 1 to {lines, number, ::group-off}, then :column"
 // in the language the app shows.
 //

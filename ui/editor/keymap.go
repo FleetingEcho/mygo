@@ -130,6 +130,7 @@ const (
 	FindInSelection
 	// Going places.
 	CommandPalette
+	GoToSymbol
 	GoToLine
 	ScrollCursorCenter
 	ScrollLineUp
@@ -165,7 +166,7 @@ var commandNames = [...]string{
 	"fold", "unfold", "toggleFold", "foldAll", "unfoldAll", "foldRecursive", "unfoldRecursive", "foldSelection",
 	"foldLevel1", "foldLevel2", "foldLevel3", "foldLevel4", "foldLevel5", "foldLevel6", "foldLevel7", "foldLevel8", "foldLevel9",
 	"find", "findReplace", "findNext", "findPrevious", "useSelectionForFind", "findInSelection",
-	"commandPalette", "goToLine", "scrollCursorCenter", "scrollLineUp", "scrollLineDown", "goToDefinition", "showCompletions", "showHover",
+	"commandPalette", "goToSymbol", "goToLine", "scrollCursorCenter", "scrollLineUp", "scrollLineDown", "goToDefinition", "showCompletions", "showHover",
 	"nextDiagnostic", "previousDiagnostic",
 	"nextHunk", "previousHunk", "revertHunk", "toggleSoftWrap", "toggleLineNumbers",
 }
@@ -267,7 +268,7 @@ func macCodeBindings() []Binding {
 		{cmd, ui.KeyF, 0, 0, Find}, {cmd | alt, ui.KeyF, 0, 0, FindReplace}, {cmd | sh, ui.KeyH, 0, 0, FindReplace},
 		{cmd, ui.KeyG, 0, 0, FindNext}, {cmd | sh, ui.KeyG, 0, 0, FindPrevious},
 		{cmd, ui.KeyE, 0, 0, UseSelectionForFind}, {cmd | alt, ui.KeyL, 0, 0, FindInSelection},
-		{cmd | sh, ui.KeyP, 0, 0, CommandPalette},
+		{cmd | sh, ui.KeyP, 0, 0, CommandPalette}, {cmd | sh, ui.KeyO, 0, 0, GoToSymbol},
 		{ctrl, ui.KeyG, 0, 0, GoToLine}, {ctrl, ui.KeyL, 0, 0, ScrollCursorCenter},
 		{ctrl, ui.KeyPageUp, 0, 0, ScrollLineUp}, {ctrl, ui.KeyPageDown, 0, 0, ScrollLineDown},
 		{0, ui.KeyF12, 0, 0, GoToDefinition}, {ctrl, ui.KeySpace, 0, 0, ShowCompletions},
@@ -328,7 +329,7 @@ func pcCodeBindings() []Binding {
 		{ctrl, ui.KeyF, 0, 0, Find}, {ctrl, ui.KeyH, 0, 0, FindReplace},
 		{0, ui.KeyF3, 0, 0, FindNext}, {sh, ui.KeyF3, 0, 0, FindPrevious},
 		{ctrl, ui.KeyE, 0, 0, UseSelectionForFind}, {ctrl | alt, ui.KeyL, 0, 0, FindInSelection},
-		{ctrl | sh, ui.KeyP, 0, 0, CommandPalette},
+		{ctrl | sh, ui.KeyP, 0, 0, CommandPalette}, {ctrl | sh, ui.KeyO, 0, 0, GoToSymbol},
 		{ctrl, ui.KeyG, 0, 0, GoToLine},
 		{ctrl, ui.KeyUp, 0, 0, ScrollLineUp}, {ctrl, ui.KeyDown, 0, 0, ScrollLineDown},
 		{0, ui.KeyF12, 0, 0, GoToDefinition}, {ctrl, ui.KeySpace, 0, 0, ShowCompletions},

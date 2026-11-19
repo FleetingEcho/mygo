@@ -155,6 +155,10 @@ type State struct {
 	// SemanticTokens optionally override syntax colors for byte ranges,
 	// using the editor's existing token palette.
 	SemanticTokens []SemanticToken
+	// Symbols are the named parts of the text: the bar GoToSymbol opens
+	// finds one, and an app's own outline lists them. The app gives them,
+	// as the SemanticTokens.
+	Symbols []Symbol
 	minimapDrag    minimapDragState
 	// OnInput sees each input event before the editor, as keys for a
 	// mode of the app's such as Vim's: returning true takes it, and the
@@ -171,10 +175,11 @@ type State struct {
 	// off: there they compose in the text still.
 	NoInputMethod bool
 
-	// RenderFindBar, RenderGoToLine, RenderPalette, RenderCompletions and
-	// RenderHover build the editor's find bar, go to line bar, command
-	// palette, completions and hovers in place of its own (DefaultFindBar,
-	// DefaultGoToLine, DefaultPalette, DefaultCompletions and DefaultHover,
+	// RenderFindBar, RenderGoToLine, RenderPalette, RenderSymbols,
+	// RenderCompletions and RenderHover build the editor's find bar, go
+	// to line bar, command palette, go to symbol bar, completions and
+	// hovers in place of its own (DefaultFindBar, DefaultGoToLine,
+	// DefaultPalette, DefaultSymbols, DefaultCompletions and DefaultHover,
 	// which they can call to wrap them): each is given the element the
 	// editor places, as a toolbar over its top right corner or a list
 	// below the caret, to style and fill, and a handle to what the part
@@ -182,6 +187,7 @@ type State struct {
 	RenderFindBar     func(c *ui.Context, bar ui.Element, f *FindBar)
 	RenderGoToLine    func(c *ui.Context, bar ui.Element, g *GoToLineBar)
 	RenderPalette     func(c *ui.Context, bar ui.Element, p *PaletteBar)
+	RenderSymbols     func(c *ui.Context, bar ui.Element, s *SymbolBar)
 	RenderCompletions func(c *ui.Context, panel ui.Element, m *CompletionMenu)
 	RenderHover       func(c *ui.Context, panel ui.Element, h *HoverCard)
 
@@ -280,12 +286,13 @@ func (st *State) options() options {
 		keepScrollbars: st.KeepScrollbars, hideScrollbars: st.NoScrollbars, scrollbar: st.Scrollbar,
 		autoClose: !st.NoAutoClose, folding: !st.NoFolding, activeLine: !st.NoActiveLine, cursorShape: st.CursorShape, fitContent: st.FitContent,
 		placeholder: st.Placeholder, label: st.Label, theme: st.Theme, bindings: st.Bindings, snippets: st.Snippets, gutterMarks: st.GutterMarks,
-		backgrounds: st.LineBackgrounds, textBgs: st.TextBackgrounds, semantic: st.SemanticTokens, diffBase: st.DiffBase, onCompletion: st.OnCompletion, onHover: st.OnHover, onDefinition: st.OnDefinition,
+		backgrounds: st.LineBackgrounds, textBgs: st.TextBackgrounds, semantic: st.SemanticTokens, symbols: st.Symbols, diffBase: st.DiffBase, onCompletion: st.OnCompletion, onHover: st.OnHover, onDefinition: st.OnDefinition,
 		hoverDelay: st.HoverDelay, noPointerHover: st.NoPointerHover,
 		noDefinitionClick: st.NoDefinitionClick, noDefinitionLink: st.NoDefinitionLink,
 		onGutterClick: st.OnGutterClick, contextMenu: st.ContextMenu, onInput: st.OnInput, noInputMethod: st.NoInputMethod, minDigits: 3,
 		renderFindBar: st.RenderFindBar, renderGoToLine: st.RenderGoToLine,
 		renderPalette:     st.RenderPalette,
+		renderSymbols:     st.RenderSymbols,
 		renderCompletions: st.RenderCompletions, renderHover: st.RenderHover,
 	}
 }

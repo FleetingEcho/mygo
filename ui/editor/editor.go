@@ -47,6 +47,7 @@ type options struct {
 	theme         *Theme
 	bindings      []Binding
 	snippets      map[string]*Snippet
+	symbols       []Symbol
 	gutterMarks   []GutterMark
 	backgrounds   []LineBackground
 	textBgs       []TextBackground
@@ -63,6 +64,7 @@ type options struct {
 	renderFindBar     func(*ui.Context, ui.Element, *FindBar)
 	renderGoToLine    func(*ui.Context, ui.Element, *GoToLineBar)
 	renderPalette     func(*ui.Context, ui.Element, *PaletteBar)
+	renderSymbols     func(*ui.Context, ui.Element, *SymbolBar)
 	renderCompletions func(*ui.Context, ui.Element, *CompletionMenu)
 	renderHover       func(*ui.Context, ui.Element, *HoverCard)
 	// decor shows a diff in the editor.
@@ -229,6 +231,7 @@ type editor struct {
 	find     finder
 	goTo     goToLine
 	palette  palette
+	symbols  symbols
 	complete completions
 	snippet  *snippetSession
 	hover    hover

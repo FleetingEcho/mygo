@@ -364,6 +364,10 @@
   "@goToLine": {
     "description": "Labels the bar that goes to a line."
   },
+  "goToSymbol": "Go to symbol",
+  "@goToSymbol": {
+    "description": "Labels the bar that goes to a symbol of the text."
+  },
   "lineRange": "Line 1 to {lines, number, ::group-off}, then :column",
   "@lineRange": {
     "description": "What the empty field of the go to line bar shows.",

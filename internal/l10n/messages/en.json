@@ -73,6 +73,7 @@
   "replaceAll": "Replace All",
   "close": "Close",
   "goToLine": "Go to line",
+  "goToSymbol": "Go to symbol",
   "lineRange": "Line 1 to {lines, number, ::group-off}, then :column",
   "currentLine": "Current line {line, number, ::group-off} of {lines, number, ::group-off}, column {column, number, ::group-off}",
   "completions": "Completions",

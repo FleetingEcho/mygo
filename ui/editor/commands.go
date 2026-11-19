@@ -170,6 +170,8 @@ func (ed *editor) run(cmd Command) bool {
 			ed.hover.close()
 		case ed.palette.open:
 			ed.palette.close(ed)
+		case ed.symbols.open:
+			ed.symbols.close(ed)
 		case ed.goTo.open:
 			ed.goTo.close(ed)
 		case ed.find.open:
@@ -362,6 +364,9 @@ func (ed *editor) run(cmd Command) bool {
 		return true
 	case CommandPalette:
 		ed.palette.show(ed)
+		return true
+	case GoToSymbol:
+		ed.symbols.show(ed)
 		return true
 	case GoToLine:
 		ed.goTo.show(ed)

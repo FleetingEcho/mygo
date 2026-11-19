@@ -483,8 +483,9 @@ func commandTitle(c Command) string {
 	return b.String()
 }
 
-// maxPaletteRows is how many commands the default palette shows.
-const maxPaletteRows = 200
+// maxListRows is how many rows of a list the default palette and the
+// default go to symbol bar show.
+const maxListRows = 200
 
 // DefaultPalette builds the editor's own command palette into bar, as
 // Zed's: the field matching commands as one types, and the list of them
@@ -505,7 +506,7 @@ func DefaultPalette(c *ui.Context, bar ui.Element, p *PaletteBar) {
 		}
 		ui.Scroll(c).Key("rows").MaxHeight(lh * 9).Children(func() {
 			for i := range items {
-				if i >= maxPaletteRows {
+				if i >= maxListRows {
 					break
 				}
 				row := p.Item(i).Row().Justify(ui.Start).Gap(t.Space(2)).AlignItems(ui.Center).Padding(t.Space(0.5), t.Space(1.5)).
@@ -554,6 +555,159 @@ func (ed *editor) buildPalette(c *ui.Context) {
 		}
 	})
 	pal.scrollTo = false
+}
+
+// SymbolBar is an editor's bar going to a symbol, as RenderSymbols
+// builds it: the symbols of the State's Symbols fuzzy matched to the
+// text typed, and the one chosen, which Enter or a click goes to.
+type SymbolBar struct {
+	c  *ui.Context
+	ed *editor
+	// chosen and closing are what the bar was asked while it was built,
+	// done once it is, so that the rows after the one clicked still
+	// build: the symbol chosen to go to, -1 for none.
+	chosen  int
+	closing bool
+}
+
+// Text is the text of the bar's field, to bind an input to, with Input.
+func (s *SymbolBar) Text() *string { return &s.ed.symbols.text }
+
+// Input makes in the bar's field: it takes the focus as the bar opens,
+// the arrows choose a symbol, Enter goes to the one chosen, and Escape
+// closes the bar back to the editor. It returns in.
+func (s *SymbolBar) Input(in ui.Element) ui.Element {
+	sym := &s.ed.symbols
+	if sym.focus {
+		sym.focus = false
+		in.Focus()
+	}
+	switch {
+	case in.Shortcut(0, ui.KeyDown):
+		sym.step(1)
+	case in.Shortcut(0, ui.KeyUp):
+		sym.step(-1)
+	case in.Submitted():
+		s.Choose(sym.chosen)
+	case in.Shortcut(0, ui.KeyEscape):
+		s.Close()
+	}
+	return in
+}
+
+// Items are the symbols shown, best first: those the text typed
+// matches, or every symbol in the order of the text while it is empty.
+func (s *SymbolBar) Items() []Symbol { return slices.Clone(s.ed.symbols.matches) }
+
+// Selected is the index in Items of the symbol chosen.
+func (s *SymbolBar) Selected() int { return s.ed.symbols.chosen }
+
+// Name is the name of the symbol i of Items, and Range where it is in
+// the text.
+func (s *SymbolBar) Name(i int) string { return s.ed.symbols.matches[i].Name }
+
+func (s *SymbolBar) Range(i int) (start, end int) {
+	sym := s.ed.symbols.matches[i]
+	return sym.Start, sym.End
+}
+
+// Item makes the row of the symbol i of Items: selected while chosen,
+// scrolled into view as the arrows choose it, and going to it when
+// clicked. Style it and build its content as the row of a list.
+func (s *SymbolBar) Item(i int) ui.Element {
+	sym := &s.ed.symbols
+	row := ui.ButtonBase(s.c).Key(i).FocusRing(false).Role(ui.RoleListItem).Label(s.Name(i)).Selected(i == sym.chosen)
+	if i == sym.chosen && sym.scrollTo {
+		row.ScrollIntoView()
+	}
+	if row.Clicked() {
+		s.Choose(i)
+	}
+	return row
+}
+
+// Choose goes to the symbol i of Items and closes the bar; Close closes
+// it without going to one. Both happen once the bar is built.
+func (s *SymbolBar) Choose(i int) {
+	if i >= 0 && i < len(s.ed.symbols.matches) {
+		s.chosen = i
+	}
+}
+
+func (s *SymbolBar) Close() { s.closing = true }
+
+// Font is the editor's font, LineHeight the height of its lines, and
+// Theme its colors, to show the symbols as the completions show theirs.
+func (s *SymbolBar) Font() ui.Font       { return s.ed.view.font }
+func (s *SymbolBar) LineHeight() float32 { return s.ed.view.lineHeight }
+func (s *SymbolBar) Theme() *Theme       { return s.ed.theme }
+
+// DefaultSymbols builds the editor's own bar going to a symbol into
+// bar, as VS Code's: the field matching symbols as one types, and the
+// list of them below it, nine rows high.
+func DefaultSymbols(c *ui.Context, bar ui.Element, s *SymbolBar) {
+	t := c.Theme()
+	tx := l10n.In(c.Locale())
+	font := s.Font()
+	lh := s.LineHeight()
+	bar.Column().Gap(t.Space(1)).Padding(t.Space(1.5)).Background(t.Surface).
+		Border(1, t.Border).Radius(t.Radius).Shadow(0, 4, 16, 0, ui.RGBA(0, 0, 0, 0.18)).Width(t.Space(80))
+	bar.Children(func() {
+		s.Input(ui.TextInputBase(c, s.Text()).Padding(t.Space(1), t.Space(2)).Background(t.Background).
+			Border(1, t.Border).Radius(t.Radius - 2).Label(tx.GoToSymbol()).Placeholder(tx.GoToSymbol()).FocusRing(false))
+		items := s.Items()
+		if len(items) == 0 {
+			return
+		}
+		ui.Scroll(c).Key("rows").MaxHeight(lh * 9).Children(func() {
+			for i := range items {
+				if i >= maxListRows {
+					break
+				}
+				row := s.Item(i).Row().AlignItems(ui.Center).Padding(t.Space(0.5), t.Space(1.5)).
+					Radius(t.Radius - 2).Height(lh + 2)
+				if i == s.Selected() {
+					row.Background(t.Accent.Alpha(0.18))
+				}
+				row.Children(func() {
+					ui.Text(c, s.Name(i)).Font(font.Family).FontSize(font.Size).SingleLine().Shrink(1)
+				})
+			}
+		})
+	})
+}
+
+// buildSymbols places the bar going to a symbol at the editor's top,
+// above the window's content, and goes to the symbol chosen.
+func (ed *editor) buildSymbols(c *ui.Context) {
+	sym := &ed.symbols
+	if sym.queried != sym.text {
+		sym.search(ed)
+	}
+	t := c.Theme()
+	anchor := ui.Box(c).Key("code symbols anchor").Absolute().Top(t.Space(1)).Left(0).Right(0).Height(0).PassThrough()
+	ui.Overlay(c, func() {
+		bar := ui.Box(c).Key("code symbols").AttachTo(anchor, ui.AnchorBottom, ui.AnchorTop).
+			Role(ui.RoleDialog).Label(l10n.In(c.Locale()).GoToSymbol()).Cursor(ui.CursorDefault).HandleInput(shield)
+		render := ed.o.renderSymbols
+		if render == nil {
+			render = DefaultSymbols
+		}
+		s := &SymbolBar{c: c, ed: ed, chosen: -1}
+		render(c, bar, s)
+		switch {
+		case s.chosen >= 0 && s.chosen < len(sym.matches):
+			target := sym.matches[s.chosen]
+			sym.close(ed)
+			off := min(max(0, target.Start), ed.view.text.Len())
+			ed.setSels([]sel{ed.newSel(off, off)}, revealCenter)
+			c.Invalidate()
+		case s.closing:
+			sym.close(ed)
+			c.Invalidate()
+		}
+	})
+	sym.scrollTo = false
 }
 
 // CompletionMenu is an editor's list of completions, as

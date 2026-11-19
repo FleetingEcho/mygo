@@ -74,6 +74,7 @@
   "replaceAll": "すべて置換",
   "close": "閉じる",
   "goToLine": "行へ移動",
+  "goToSymbol": "シンボルへ移動",
   "lineRange": "1 から {lines, number, ::group-off} 行目、続けて :列",
   "currentLine": "現在 {lines, number, ::group-off} 行中 {line, number, ::group-off} 行目、{column, number, ::group-off} 列目",
   "completions": "補完候補",

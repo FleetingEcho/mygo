@@ -204,6 +204,9 @@ func (ed *editor) buildBars(c *ui.Context) {
 	if ed.palette.open {
 		ed.buildPalette(c)
 	}
+	if ed.symbols.open {
+		ed.buildSymbols(c)
+	}
 }
 
 // accessibility describes the editor to assistive technology, while it
