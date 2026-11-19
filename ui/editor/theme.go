@@ -24,6 +24,9 @@ type Theme struct {
 	Cursor            ui.Color
 	// MatchingBracket outlines the brackets around the caret.
 	MatchingBracket ui.Color
+	// Brackets colors the brackets of each nesting depth, around again
+	// from the fourth pair: the rainbow of bracket pairs.
+	Brackets [4]ui.Color
 	// Match highlights the matches of the find bar, CurrentMatch the one
 	// chosen; Occurrence other occurrences of the selected text.
 	Match        ui.Color
@@ -72,6 +75,7 @@ func DefaultTheme(t *ui.Theme) *Theme {
 	if t.Dark {
 		ct.ActiveLine = ui.RGBA(255, 255, 255, 0.045)
 		ct.MatchingBracket = ui.RGBA(255, 255, 255, 0.35)
+		ct.Brackets = [4]ui.Color{ui.Hex("#e5c07b"), ui.Hex("#e06c9f"), ui.Hex("#61afef"), ui.Hex("#98c379")}
 		ct.Match = ui.RGBA(255, 210, 60, 0.22)
 		ct.CurrentMatch = ui.RGBA(255, 160, 40, 0.5)
 		ct.Occurrence = ui.RGBA(255, 255, 255, 0.1)
@@ -100,6 +104,7 @@ func DefaultTheme(t *ui.Theme) *Theme {
 	} else {
 		ct.ActiveLine = ui.RGBA(0, 0, 0, 0.035)
 		ct.MatchingBracket = ui.RGBA(0, 0, 0, 0.3)
+		ct.Brackets = [4]ui.Color{ui.Hex("#8a6d00"), ui.Hex("#c2185b"), ui.Hex("#1565c0"), ui.Hex("#2e7d32")}
 		ct.Match = ui.RGBA(255, 200, 0, 0.3)
 		ct.CurrentMatch = ui.RGBA(255, 140, 0, 0.45)
 		ct.Occurrence = ui.RGBA(0, 0, 0, 0.07)
@@ -153,6 +158,9 @@ func (ct *Theme) resolve(t *ui.Theme) *Theme {
 	fill(&out.InactiveSelection, def.InactiveSelection)
 	fill(&out.Cursor, def.Cursor)
 	fill(&out.MatchingBracket, def.MatchingBracket)
+	for i := range out.Brackets {
+		fill(&out.Brackets[i], def.Brackets[i])
+	}
 	fill(&out.Match, def.Match)
 	fill(&out.CurrentMatch, def.CurrentMatch)
 	fill(&out.Occurrence, def.Occurrence)

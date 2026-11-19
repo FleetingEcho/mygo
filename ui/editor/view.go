@@ -25,6 +25,7 @@ type view struct {
 	version  uint64
 	hl       Highlighter // the buffer's, as of the last frame
 	hlGen    int         // counts the highlighters the view had
+	depths   bracketDepths
 	readOnly bool
 	semantic []SemanticToken
 
@@ -487,6 +488,7 @@ func (v *view) setBuffer(b *Buffer) {
 	v.buf = b
 	v.text, v.version = b.snapshot()
 	v.hl = nil
+	v.depths = bracketDepths{}
 	v.lines.m = nil
 	v.maxLine = 0
 	v.heights.setLines(v.text.LineCount())
@@ -517,6 +519,7 @@ func (v *view) sync(moved func(cs []change)) bool {
 		// Too far behind the buffer's log to follow its edits: the
 		// changes of the lines between the text it had and the text.
 		cs := changesBetween(old, text)
+		v.depths.invalidate(0)
 		v.heights.setLines(text.LineCount())
 		v.heights.wraps.reset(text.LineCount(), v.wrap)
 		v.wrapAt = 0
@@ -536,6 +539,7 @@ func (v *view) sync(moved func(cs []change)) bool {
 			// Lines from the change's first are measured anew.
 			v.heights.wraps.splice(c.newLine, c.oldEndLine-c.oldLine+1, c.newEndLine-c.newLine+1)
 			v.wrapAt = min(v.wrapAt, c.newLine)
+			v.depths.invalidate(c.newLine + 1)
 		}
 		for i := range v.inlays {
 			v.inlays[i].at = mapOffset(v.inlays[i].at, cs, biasRight)
@@ -575,6 +579,7 @@ func (v *view) followHighlighter() Highlighter {
 		v.hl = hl
 		v.lines.m = nil
 		v.hlGen++
+		v.depths = bracketDepths{}
 	}
 	return hl
 }
@@ -1498,6 +1503,8 @@ func (v *view) colorsOf(l *lineLayout, out *runColors) {
 		out.ends = append(out.ends, l.toDisp(t.End, false))
 		out.colors = append(out.colors, v.theme.TokenColor(t.Kind))
 	}
+	// Brackets of nested pairs take the color of their depth.
+	v.rainbowBrackets(l, out)
 	lineEnd := l.start + len(l.text)
 	for _, token := range v.semantic {
 		start, end := max(token.Start, l.start), min(token.End, lineEnd)

@@ -23,7 +23,11 @@ type bracketCache struct {
 
 // bracketPairs returns the language's brackets of one byte each.
 func (ed *editor) bracketPairs() (opens, closes string) {
-	l := ed.language()
+	return bracketPairsOf(ed.language())
+}
+
+// bracketPairsOf returns the language's brackets of one byte each.
+func bracketPairsOf(l *Language) (opens, closes string) {
 	if l == nil {
 		return "([{", ")]}"
 	}
@@ -38,6 +42,93 @@ func (ed *editor) bracketPairs() (opens, closes string) {
 
 func bracketToken(k TokenKind) bool {
 	return k != TokenString && k != TokenComment && k != TokenRegexp && k != TokenEscape && k != TokenCode
+}
+
+// walkBrackets calls fn for each bracket of one line of code, outside
+// the tokens that are not code, with the depth of its pair: a closing
+// bracket takes its opener's. It returns the depth the line ends at,
+// which is the depth its next line starts at.
+func walkBrackets(text string, toks []Token, opens, closes string, depth int, fn func(at, depth int, open bool)) int {
+	at := 0
+	for _, t := range toks {
+		end := min(t.End, len(text))
+		if at < end && bracketToken(t.Kind) {
+			depth = walkBracketRun(text[at:end], at, opens, closes, depth, fn)
+		}
+		at = max(at, end)
+	}
+	return walkBracketRun(text[at:], at, opens, closes, depth, fn)
+}
+
+// walkBracketRun is walkBrackets over the code run s, which starts at
+// the offset at of its line.
+func walkBracketRun(s string, at int, opens, closes string, depth int, fn func(at, depth int, open bool)) int {
+	for i := 0; i < len(s); i++ {
+		c := rune(s[i])
+		switch {
+		case strings.ContainsRune(opens, c) && !strings.ContainsRune(closes, c):
+			if fn != nil {
+				fn(at+i, depth, true)
+			}
+			depth++
+		case strings.ContainsRune(closes, c) && !strings.ContainsRune(opens, c):
+			depth--
+			if fn != nil {
+				fn(at+i, depth, false)
+			}
+		}
+	}
+	return depth
+}
+
+// bracketDepths is the depth the language's brackets nest at each line's
+// start, worked out a line at a time as the lines are shown.
+type bracketDepths struct {
+	// starts holds the depth of each line's start from the first line
+	// through the last it holds.
+	starts []int
+}
+
+// invalidate takes the depths of line and those after it as unknown: a
+// change leaves the depth the line it starts at started with, as the
+// highlighter leaves its states.
+func (d *bracketDepths) invalidate(line int) {
+	d.starts = d.starts[:max(0, min(len(d.starts), line))]
+}
+
+// of returns the depth the brackets nest at the start of line.
+func (d *bracketDepths) of(v *view, line int, opens, closes string) int {
+	line = max(0, min(line, v.text.LineCount()))
+	if len(d.starts) == 0 {
+		d.starts = []int{0}
+	}
+	for len(d.starts) <= line {
+		i := len(d.starts) - 1
+		s := v.text.Line(i)
+		d.starts = append(d.starts, d.starts[i]+walkBrackets(s, v.lineTokens(i, s), opens, closes, 0, nil))
+	}
+	return d.starts[line]
+}
+
+// rainbowBrackets colors the brackets of l by the depth their pair
+// nests at, as VS Code's bracket pair colorization.
+func (v *view) rainbowBrackets(l *lineLayout, out *runColors) {
+	if v.buf == nil {
+		return
+	}
+	opens, closes := bracketPairsOf(v.buf.language)
+	if opens == "" {
+		return
+	}
+	ct := v.theme
+	depth := v.depths.of(v, l.n, opens, closes)
+	walkBrackets(l.text, l.toks, opens, closes, depth, func(at, d int, _ bool) {
+		i := d % len(ct.Brackets)
+		if i < 0 {
+			i += len(ct.Brackets)
+		}
+		out.overlay(l.toDisp(at, false), l.toDisp(at+1, false), ct.Brackets[i])
+	})
 }
 
 // matchBracket finds the bracket matching the one at off.
