@@ -171,6 +171,7 @@ type minimapDragState struct {
 	active, moved bool
 	downY         float32
 	downLine      int
+	downScroll    float64
 }
 
 func (st *State) minimapInput(ev ui.InputEvent, line, rows int) bool {
@@ -182,7 +183,7 @@ func (st *State) minimapInput(ev ui.InputEvent, line, rows int) bool {
 		if ev.Button != 0 {
 			return false
 		}
-		st.minimapDrag = minimapDragState{active: true, downY: ev.Y, downLine: line}
+		st.minimapDrag = minimapDragState{active: true, downY: ev.Y, downLine: line, downScroll: st.ed.scrollY}
 		return true
 	case ui.InputPointerMove:
 		drag := &st.minimapDrag
@@ -194,10 +195,13 @@ func (st *State) minimapInput(ev ui.InputEvent, line, rows int) bool {
 			return true
 		}
 		drag.moved = true
-		lineCount := st.Buffer.LineCount()
-		offset := int(math.Round(float64(delta) * float64(lineCount) / float64(rows*minimapRowStep)))
-		target := max(0, min(lineCount-1, drag.downLine+offset))
-		st.ScrollTo(target)
+		// The view follows the drag at the minimap's scale, whose height
+		// stands for the text's: where the finger goes the view goes,
+		// rather than a minimal reveal, which does not move for a line
+		// the view already shows.
+		total := st.ed.view.heights.total()
+		scrolled := drag.downScroll + float64(delta)*total/float64(rows*minimapRowStep)
+		st.ed.setScroll(max(0, min(scrolled, st.ed.scrollMax())))
 		st.ed.services.Invalidate()
 		return true
 	case ui.InputPointerUp:

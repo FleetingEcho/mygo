@@ -149,7 +149,9 @@ func TestMinimapBlankBlockDrags(t *testing.T) {
 	if !ct.st.minimapInput(ui.InputEvent{Kind: ui.InputPointerDown, Y: 30}, 99, 10) {
 		t.Fatal("the blank block takes no press")
 	}
-	ct.st.minimapInput(ui.InputEvent{Kind: ui.InputPointerMove, Y: 0}, 99, 10)
+	// A drag of one row step, which a minimal reveal would not move the
+	// view for at all: the view follows the finger.
+	ct.st.minimapInput(ui.InputEvent{Kind: ui.InputPointerMove, Y: 24}, 99, 10)
 	ct.st.minimapInput(ui.InputEvent{Kind: ui.InputPointerUp}, 99, 10)
 	if ct.st.ScrollY() >= ed.scrollMax() {
 		t.Fatal("the drag from the blank block did not scroll the view up")
