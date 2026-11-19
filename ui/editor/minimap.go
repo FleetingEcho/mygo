@@ -38,7 +38,12 @@ func Minimap(c *ui.Context, st *State) ui.Element {
 	theme := st.ed.theme
 	firstRow, lastRow, blankDIP := minimapBand(&st.ed, rows, lineCount)
 	var scratch []Token
-	return ui.Column(c).Padding(4, 5).Gap(1).AlignItems(ui.Stretch).Clip().Children(func() {
+	return ui.Column(c).Padding(4, 5).Gap(0).AlignItems(ui.Stretch).Clip().
+		// The rows and the gaps between them take the drag alike: a press
+		// anywhere in the minimap scrolls the view.
+		HandleInput(func(ev ui.InputEvent) bool {
+			return st.minimapInput(ev, 0, rows)
+		}).Children(func() {
 		for row := range rows {
 			line := row * lineCount / rows
 			text := buffer.Line(line)
@@ -49,7 +54,7 @@ func Minimap(c *ui.Context, st *State) ui.Element {
 			}
 			lineStart := buffer.Offset(Pos{Line: line})
 			runs := minimapRuns(text, tokens, st.ed.view.semantic, lineStart)
-			button := ui.ButtonBase(c).FillWidth().Justify(ui.Start).Height(5).Padding(0).
+			button := ui.ButtonBase(c).FillWidth().Justify(ui.Start).Height(minimapRowStep).Padding(0).
 				Label(l10n.In(c.Locale()).GoToLine() + " " + strconv.Itoa(line+1)).
 				HandleInput(func(ev ui.InputEvent) bool {
 					return st.minimapInput(ev, line, rows)
