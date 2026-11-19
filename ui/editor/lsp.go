@@ -34,6 +34,14 @@ type Completion struct {
 	Kind   CompletionKind
 	// Insert replaces the word before the caret, Label when empty.
 	Insert string
+	// Replace, when set, is the range Insert replaces in its place, as a
+	// language server's textEdit: the offsets of the text the completion
+	// was requested for.
+	Replace *Range
+	// Additional are edits the completion makes with it beyond the
+	// insertion, as an import it adds: a language server's
+	// additionalTextEdits.
+	Additional []Edit
 	// Snippet inserts a parsed template, overriding Insert and Label.
 	// Kind alone only chooses an icon; it never interprets Insert.
 	Snippet *Snippet
@@ -310,18 +318,32 @@ func (ed *editor) acceptCompletion() bool {
 	typed := ed.slice(cc.at, p.head)
 	cc.close()
 	// The word typed goes where the other carets have it before them too,
-	// as Zed's; elsewhere the completion goes in at the caret.
+	// as Zed's; elsewhere the completion goes in at the caret. A range of
+	// its own, as a language server's textEdit, replaces that instead.
 	var edits []Edit
-	for _, s := range ed.sels {
-		a := s.start()
-		if s.head-n >= 0 && ed.slice(s.head-n, s.head) == typed {
-			a = s.head - n
+	if it.Replace != nil {
+		edits = append(edits, Edit{Start: it.Replace.Start, End: it.Replace.End, Text: ins})
+	} else {
+		for _, s := range ed.sels {
+			a := s.start()
+			if s.head-n >= 0 && ed.slice(s.head-n, s.head) == typed {
+				a = s.head - n
+			}
+			edits = append(edits, Edit{Start: a, End: s.end(), Text: ins})
 		}
-		edits = append(edits, Edit{Start: a, End: s.end(), Text: ins})
 	}
 	if it.Snippet != nil {
-		return ed.insertSnippet(it.Snippet, edits)
+		return ed.insertSnippetExtra(it.Snippet, edits, it.Additional)
 	}
+	// Its additional edits go with it in one step, undone together. An
+	// edit of no range at an offset goes before one of a range there.
+	edits = append(edits, it.Additional...)
+	slices.SortStableFunc(edits, func(a, b Edit) int {
+		if a.Start != b.Start {
+			return a.Start - b.Start
+		}
+		return a.End - b.End
+	})
 	sels := slices.Clone(ed.sels)
 	ed.apply(edits, editOther, func(move func(int, bias) int) []sel {
 		for i := range sels {

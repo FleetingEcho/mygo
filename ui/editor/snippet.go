@@ -220,6 +220,12 @@ type snippetSession struct {
 }
 
 func (ed *editor) insertSnippet(s *Snippet, edits []Edit) bool {
+	return ed.insertSnippetExtra(s, edits, nil)
+}
+
+// insertSnippetExtra is insertSnippet, with extra edits made in the same
+// step, as a completion's additionalTextEdits.
+func (ed *editor) insertSnippetExtra(s *Snippet, edits, extra []Edit) bool {
 	if ed.o.readOnly {
 		return false
 	}
@@ -233,9 +239,30 @@ func (ed *editor) insertSnippet(s *Snippet, edits []Edit) bool {
 		targets[i] = sel{anchor: e.Start, head: e.End, id: ed.sels[i].id}
 	}
 	targets = mergeSels(targets)
-	edits = make([]Edit, len(targets))
+	// Each edit of the step, in the order of the text: where the
+	// templates go, and what the extras change around them.
+	type step struct {
+		e    Edit
+		site int // the caret the template goes at, -1 for an extra edit
+	}
+	all := make([]step, 0, len(targets)+len(extra))
 	for i, target := range targets {
-		edits[i] = Edit{Start: target.start(), End: target.end(), Text: s.text}
+		all = append(all, step{Edit{Start: target.start(), End: target.end(), Text: s.text}, i})
+	}
+	for _, e := range extra {
+		all = append(all, step{e, -1})
+	}
+	// An edit of no range at an offset goes before one of a range there:
+	// an import added where a completion replaces lands above it.
+	slices.SortStableFunc(all, func(a, b step) int {
+		if a.e.Start != b.e.Start {
+			return a.e.Start - b.e.Start
+		}
+		return a.e.End - b.e.End
+	})
+	edits = make([]Edit, len(all))
+	for i, p := range all {
+		edits[i] = p.e
 	}
 	ed.snippet = nil
 	ed.endGroup()
@@ -249,11 +276,13 @@ func (ed *editor) insertSnippet(s *Snippet, edits []Edit) bool {
 	ok := ed.apply(edits, editOther, func(func(int, bias) int) []sel {
 		session.fields = nil
 		delta := 0
-		for site, e := range edits {
-			for _, f := range s.fields {
-				session.fields = append(session.fields, snippetField{id: f.id, start: e.Start + delta + f.start, end: e.Start + delta + f.end, site: site})
+		for _, p := range all {
+			if p.site >= 0 {
+				for _, f := range s.fields {
+					session.fields = append(session.fields, snippetField{id: f.id, start: p.e.Start + delta + f.start, end: p.e.Start + delta + f.end, site: p.site})
+				}
 			}
-			delta += len(s.text) - (e.End - e.Start)
+			delta += len(p.e.Text) - (p.e.End - p.e.Start)
 		}
 		return session.selections(ed)
 	})
