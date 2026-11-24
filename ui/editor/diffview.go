@@ -124,6 +124,9 @@ type DiffState struct {
 	expandV     int
 	selected    DiffLineRange
 	hasSel      bool
+	// extraSel are further ranges painted as selected, beside the one the
+	// clicks and keys extend; see SetExtraSelectedLines.
+	extraSel []DiffLineRange
 	// oldActive is set while the old side of a split view has the
 	// keyboard, and stays after it goes, until the new side has it.
 	oldActive bool
@@ -326,6 +329,27 @@ func (d *DiffState) SetSelectedLines(r DiffLineRange, ok bool) {
 		r.Start, r.End = r.End, r.Start
 	}
 	d.selected, d.hasSel = r, ok
+}
+
+// SetExtraSelectedLines paints further line ranges as selected, beside the
+// range SetSelectedLines holds. They only change how the lines look: clicks
+// and keys still extend the one range, which a caller that keeps several
+// independent selections uses as the latest. Pass nil to clear them.
+func (d *DiffState) SetExtraSelectedLines(ranges []DiffLineRange) {
+	d.extraSel = append(d.extraSel[:0:0], ranges...)
+}
+
+// lineSelected reports whether a line of a side is painted as selected.
+func (d *DiffState) lineSelected(side DiffSide, line int) bool {
+	if d.hasSel && d.selected.Side == side && line >= d.selected.Start && line <= d.selected.End {
+		return true
+	}
+	for _, r := range d.extraSel {
+		if r.Side == side && line >= r.Start && line <= r.End {
+			return true
+		}
+	}
+	return false
 }
 
 // GoToHunk puts the caret of the active side (ActiveSide) at the start

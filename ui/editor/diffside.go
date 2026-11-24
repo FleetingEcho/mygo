@@ -79,7 +79,7 @@ func (s *diffSide) lineStyle(line int) lineLook {
 	if s.old {
 		side = DiffOld
 	}
-	if d.hasSel && d.selected.Side == side && line >= d.selected.Start && line <= d.selected.End {
+	if d.lineSelected(side, line) {
 		m := ed.theme.Modified
 		bg := st.bg
 		if bg.A == 0 {
