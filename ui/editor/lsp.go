@@ -1,6 +1,7 @@
 package editor
 
 import (
+	"math"
 	"slices"
 	"sort"
 	"strings"
@@ -558,6 +559,7 @@ func (ed *editor) dropSuggestion() {
 
 // setSuggestion shows text at off, which Tab inserts.
 func (ed *editor) setSuggestion(off int, text string) {
+	old := ed.view.keepInlays()
 	ed.view.inlays = slices.DeleteFunc(ed.view.inlays, func(in inlay) bool { return in.kind == 1 })
 	ed.suggestion = text
 	if text != "" {
@@ -568,6 +570,7 @@ func (ed *editor) setSuggestion(off int, text string) {
 		ed.view.inlays = append(ed.view.inlays, inlay{at: off, text: first, kind: 1})
 		sortInlays(ed.view.inlays)
 	}
+	ed.view.inlaysChanged(old)
 	ed.view.lines.m = nil
 	ed.view.invalidateStyledLines()
 }
@@ -576,8 +579,48 @@ func sortInlays(in []inlay) {
 	slices.SortStableFunc(in, func(a, b inlay) int { return a.at - b.at })
 }
 
+// keepInlays returns a copy of the inlays, for inlaysChanged to compare
+// with once they are set.
+func (v *view) keepInlays() []inlay {
+	v.inlayScratch = append(v.inlayScratch[:0], v.inlays...)
+	return v.inlayScratch
+}
+
+// inlaysChanged forgets the widths of the lines whose inlays differ from
+// old's, both sorted by offset: an app may set the same inlays every
+// frame, which leaves the widths of lines out of view as they are.
+func (v *view) inlaysChanged(old []inlay) {
+	a, b := old, v.inlays
+	for len(a) > 0 || len(b) > 0 {
+		at := math.MaxInt
+		if len(a) > 0 {
+			at = a[0].at
+		}
+		if len(b) > 0 {
+			at = min(at, b[0].at)
+		}
+		i, j := 0, 0
+		for i < len(a) && a[i].at == at {
+			i++
+		}
+		for j < len(b) && b[j].at == at {
+			j++
+		}
+		// The click handler is left out: it changes no width, and a func is
+		// not comparable.
+		if !slices.EqualFunc(a[:i], b[:j], func(x, y inlay) bool {
+			return x.at == y.at && x.text == y.text && x.kind == y.kind && x.ellipsis == y.ellipsis
+		}) {
+			line := v.text.LineOf(at)
+			v.measured.forget(line, line)
+		}
+		a, b = a[i:], b[j:]
+	}
+}
+
 // setInlays shows the inlay hints.
 func (ed *editor) setInlays(hints []Inlay) {
+	old := ed.view.keepInlays()
 	ed.view.inlays = slices.DeleteFunc(ed.view.inlays, func(in inlay) bool { return in.kind == 0 || in.kind == inlayTrailing })
 	for _, h := range hints {
 		kind := 0
@@ -587,6 +630,7 @@ func (ed *editor) setInlays(hints []Inlay) {
 		ed.view.inlays = append(ed.view.inlays, inlay{at: h.Offset, text: h.Text, kind: kind, ellipsis: h.Ellipsis, click: h.Click})
 	}
 	sortInlays(ed.view.inlays)
+	ed.view.inlaysChanged(old)
 	ed.view.lines.m = nil
 	ed.view.invalidateStyledLines()
 }

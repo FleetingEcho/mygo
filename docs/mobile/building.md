@@ -21,7 +21,9 @@ The `.aab` is what Google Play takes, the `.apk` what other stores and
 devices install. Release builds are signed with `android.keystore`, its
 passwords from `MYGO_ANDROID_KEYSTORE_PASSWORD` and
 `MYGO_ANDROID_KEY_PASSWORD`, or else with the debug key, which Google Play
-refuses.
+refuses. From `minSdk` 24 the build leaves out the JAR signature (v1),
+which Android needs no more; `android.v1Signing` adds it for the phones
+whose installers still ask for it.
 
 The configuration's `ios` and `android` sections set the rest (see
 [Configuration](../configuration.md)):
@@ -34,6 +36,37 @@ export default defineConfig({
   android: { permissions: ["CAMERA"], keystore: "upload.jks", keyAlias: "upload" },
 });
 ```
+
+## App extensions
+
+An app extension, as a VPN client's Network Extension (its packet tunnel
+provider), is a bundle of its own in the app's `PlugIns/`, with its own
+provisioning profile and entitlements. Build it apart, with Xcode, and name
+it in `ios.extensions`:
+
+```json
+{
+  "identifier": "com.example.vpn",
+  "ios": {
+    "extensions": [
+      { "path": "build/PacketTunnel.appex", "provisioningProfile": "PacketTunnel App Store" }
+    ]
+  }
+}
+```
+
+The CLI copies each into `PlugIns/` and signs it before the app, with the
+app's certificate: its profile goes in it as `embedded.mobileprovision`, and
+it is signed with that profile's entitlements. `provisioningProfile` is its
+name, UUID or the path of a `.mobileprovision`; without one, the installed
+profile that best fits the extension's identifier and `ios.distribution`.
+The identifier must start with the app's and a dot, as
+`com.example.vpn.tunnel`, or iOS refuses to install it, and its version and
+build number should be the app's, which App Store Connect checks. The
+simulator's build signs extensions ad hoc. `mygo dev` on a device signs them
+with development profiles, and the development app, `com.example.vpn.dev`,
+carries the extension as `com.example.vpn.dev.tunnel`: derive the extension's
+identifier in the app's code from `Bundle.main.bundleIdentifier`.
 
 ## Publishing
 
@@ -106,3 +139,42 @@ app's icon.
 
 **Background modes**: `ios.backgroundModes` are the app's
 `UIBackgroundModes`, with those its plugins ask for.
+
+## Executables
+
+An app that runs a program of its own beside its Go code, as a VPN client
+runs its proxy core, ships it on Android as a native library: a native
+module carries it as `kotlin/src/main/jniLibs/arm64-v8a/lib<name>.so`, one per
+ABI. Android lets an app exec only its files in `nativeLibraryDir` (W^X, from
+targetSdk 29), and by default the app's libraries stay in the APK,
+uncompressed, and are loaded from it, so that directory is empty.
+`android.extractNativeLibs` has the installer extract them there:
+
+```json
+{
+  "android": { "extractNativeLibs": true }
+}
+```
+
+The app then finds the executable at
+`context.applicationInfo.nativeLibraryDir + "/lib<name>.so"`. The libraries
+ship compressed, and take space again once extracted, so leave it off unless
+the app execs one.
+
+Link such an executable for 16 KB pages (`-Wl,-z,max-page-size=16384`), as
+Android's own libraries are: on a device or emulator with 16 KB pages, one
+linked for 4 KB pages crashes as it starts.
+
+An executable built for some ABIs only, as `arm64-v8a`, limits the app to
+them, so that no build for another ABI lacks it:
+
+```json
+{
+  "android": { "extractNativeLibs": true, "abis": ["arm64"] }
+}
+```
+
+`mygo build -platform android` then builds those alone, and `mygo dev`
+refuses a device or emulator of another ABI. In every build, a native
+module's libraries of an ABI that Go wasn't built for stay out of the APK:
+a device of that ABI would install them without the app.

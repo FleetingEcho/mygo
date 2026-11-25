@@ -11,7 +11,7 @@ mygo build -platform android/arm64   # one ABI: arm64, arm or amd64
 
 `.ipa` 用已安装的描述文件中最匹配应用标识符和 `ios.distribution`（默认 `app-store`，TestFlight 也用它）的那个签名，其证书在钥匙串中；它带有 App Store Connect 要求的隐私清单，根据应用代码用到的内容生成，除非项目有自己的 `ios/PrivacyInfo.xcprivacy`。如果构建中引用了 Apple 的私有方法，CLI 会拒绝构建，因为 App 审核会拒绝它。
 
-`.aab` 是 Google Play 接受的格式，`.apk` 供其他应用商店和设备安装。正式版用 `android.keystore` 签名，其密码来自 `MYGO_ANDROID_KEYSTORE_PASSWORD` 和 `MYGO_ANDROID_KEY_PASSWORD`；否则用调试密钥签名，而 Google Play 不接受调试密钥。
+`.aab` 是 Google Play 接受的格式，`.apk` 供其他应用商店和设备安装。正式版用 `android.keystore` 签名，其密码来自 `MYGO_ANDROID_KEYSTORE_PASSWORD` 和 `MYGO_ANDROID_KEY_PASSWORD`；否则用调试密钥签名，而 Google Play 不接受调试密钥。`minSdk` 为 24 及以上时，构建会省掉 Android 已不再需要的 JAR 签名（v1）；有些手机的安装器仍要求它，可以用 `android.v1Signing` 加上。
 
 其余设置在配置的 `ios` 和 `android` 部分中（见[配置](../configuration.md)）：
 
@@ -23,6 +23,23 @@ export default defineConfig({
   android: { permissions: ["CAMERA"], keystore: "upload.jks", keyAlias: "upload" },
 });
 ```
+
+## 应用扩展
+
+应用扩展（如 VPN 客户端的 Network Extension，即它的 packet tunnel provider）是应用 `PlugIns/` 中一个独立的包，有自己的描述文件和权限。用 Xcode 单独构建它，然后在 `ios.extensions` 中列出：
+
+```json
+{
+  "identifier": "com.example.vpn",
+  "ios": {
+    "extensions": [
+      { "path": "build/PacketTunnel.appex", "provisioningProfile": "PacketTunnel App Store" }
+    ]
+  }
+}
+```
+
+CLI 把每个扩展复制进 `PlugIns/`，并在签名应用之前用应用的证书为它签名：它的描述文件作为 `embedded.mobileprovision` 放进扩展中，扩展以该描述文件的权限签名。`provisioningProfile` 是描述文件的名称、UUID 或 `.mobileprovision` 的路径；不设置时，使用已安装的、最符合扩展标识符和 `ios.distribution` 的那个。标识符必须以应用的标识符加一个点开头，如 `com.example.vpn.tunnel`，否则 iOS 拒绝安装；它的版本号和构建号应与应用的相同，App Store Connect 会检查。模拟器的构建以 ad hoc 方式为扩展签名。在设备上运行 `mygo dev` 时用开发描述文件为它们签名，开发应用 `com.example.vpn.dev` 以 `com.example.vpn.dev.tunnel` 携带扩展：在应用的代码中从 `Bundle.main.bundleIdentifier` 得出扩展的标识符。
 
 ## 发布
 
@@ -69,3 +86,27 @@ export default defineConfig({
 **启动画面**：`ios.launchScreen` 是一种颜色、居中显示在其上的一张图片，或两者兼有，不需要 storyboard：CLI 把它们编译进应用的资源目录，并在 `UILaunchScreen` 中引用。图片是 3 倍屏尺寸的 PNG，所以 600×600 像素的标志占 200×200 点。`android.splash` 是应用启动时系统所显示画面的颜色，应用图标显示在它上面。
 
 **后台模式**：`ios.backgroundModes` 是应用的 `UIBackgroundModes`，加上插件要求的那些。
+
+## 可执行文件
+
+在 Go 代码之外还要运行一个自带程序的应用（如 VPN 客户端运行它的代理核心），在 Android 上把这个程序作为原生库发布：由原生模块以 `kotlin/src/main/jniLibs/arm64-v8a/lib<name>.so` 携带，每个 ABI 一份。Android 只允许应用执行它在 `nativeLibraryDir` 中的文件（W^X，从 targetSdk 29 起），而默认情况下应用的库留在 APK 中，不压缩，直接从中加载，所以这个目录是空的。`android.extractNativeLibs` 让安装器把它们解压到那里：
+
+```json
+{
+  "android": { "extractNativeLibs": true }
+}
+```
+
+之后应用可以在 `context.applicationInfo.nativeLibraryDir + "/lib<name>.so"` 找到这个可执行文件。这些库会压缩发布，解压后会再占一份空间，所以除非应用要执行其中一个，否则不要开启。
+
+这样的可执行文件要按 16 KB 页链接（`-Wl,-z,max-page-size=16384`），和 Android 自己的库一样：在 16 KB 页的设备或模拟器上，按 4 KB 页链接的程序一启动就会崩溃。
+
+只为部分 ABI 构建的可执行文件（如只有 `arm64-v8a`）会把应用限制在这些 ABI 上，这样不会有哪个 ABI 的构建缺了它：
+
+```json
+{
+  "android": { "extractNativeLibs": true, "abis": ["arm64"] }
+}
+```
+
+之后 `mygo build -platform android` 只构建这些 ABI，`mygo dev` 会拒绝其他 ABI 的设备或模拟器。无论哪种构建，原生模块里 Go 没有为之构建的 ABI 的库都不会进 APK：否则那种 ABI 的设备会只装上这些库，却没有应用本身。

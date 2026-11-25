@@ -131,6 +131,10 @@ type touchPan struct {
 	// swallow drops what the finger does: it went down to stop a fling,
 	// which takes no tap.
 	swallow bool
+	// caught says it went down on a fling, which it stopped: past the
+	// slop it pans as any finger does, as UIKit's scroll views follow
+	// the finger that stops their deceleration.
+	caught bool
 	// waiting is a press held back until pressDelay passed (at), on what
 	// scrolls, with its clicks.
 	waiting bool
@@ -153,6 +157,9 @@ type touchPan struct {
 	// its selection then.
 	textBefore uint64
 	selBefore  platform.TextRange
+	// menuBefore is whether the system's edit menu showed as it went down,
+	// which its landing hid.
+	menuBefore bool
 	// samples are its last positions, for its speed as it lifts.
 	samples [6]touchSample
 	n       int
@@ -181,6 +188,10 @@ func (rt *engine) touchEvent(ev platform.SurfaceEvent, x, y float32) bool {
 		*t = touchPan{down: true, x0: x, y0: y, lx: x, ly: y, at: rt.now(), aimX: t.aimX, aimY: t.aimY}
 		t.sample(rt.now(), x, y)
 		rt.catchBounces()
+		// The edit menu goes as a finger lands anywhere but on it, which
+		// takes its own touches; a hold or a handle let go brings it back.
+		t.menuBefore = rt.touchText.menu
+		rt.hideEditMenu()
 		if h := rt.handleAt(x, y); h != handleNone {
 			rt.touchText.held = h
 			return true
@@ -192,7 +203,7 @@ func (rt *engine) touchEvent(ev platform.SurfaceEvent, x, y float32) bool {
 		if rt.flinging.on {
 			// A finger stops content flinging, and taps nothing.
 			rt.flinging.on = false
-			t.swallow = true
+			t.swallow, t.caught = true, true
 			return true
 		}
 		t.holds = rt.longPressTarget(x, y)
@@ -212,7 +223,10 @@ func (rt *engine) touchEvent(ev platform.SurfaceEvent, x, y float32) bool {
 			return true
 		}
 		if t.swallow {
-			return true
+			if !t.caught || math.Hypot(float64(x-t.x0), float64(y-t.y0)) < touchSlop {
+				return true
+			}
+			t.swallow, t.caught = false, false
 		}
 		if t.dragging {
 			return false
@@ -419,7 +433,7 @@ func (rt *engine) afterTap(was *touchPan) {
 		rt.touchText.id = 0
 		return
 	}
-	rt.textTapped(s, was.textBefore == rt.focused, was.selBefore)
+	rt.textTapped(s, was.textBefore == rt.focused, was.menuBefore, was.selBefore)
 }
 
 // overScroller reports whether a finger at x, y is on what scrolls, whose
@@ -845,8 +859,8 @@ func (rt *engine) flingStep(now time.Time) {
 		return
 	}
 	ms := float32(now.Sub(f.at).Seconds() * 1000)
-	f.at = now
 	if ms <= 0 {
+		f.at = now
 		rt.animating = true
 		return
 	}
@@ -854,6 +868,14 @@ func (rt *engine) flingStep(now time.Time) {
 	k := float32(math.Pow(flingDecay, float64(ms)))
 	scale := (1 - k) / -float32(math.Log(flingDecay)) / 1000
 	dx, dy := f.vx*scale, f.vy*scale
+	if dx == 0 && dy == 0 {
+		// Too soon after the last to move it (k rounds to 1): the time
+		// adds up to the next frame, rather than ending the fling as if
+		// it could go no further.
+		rt.animating = true
+		return
+	}
+	f.at = now
 	f.vx, f.vy = f.vx*k, f.vy*k
 	axes := Orientation(0)
 	if f.vx != 0 {
@@ -964,6 +986,7 @@ func (rt *engine) systemEvent(ev platform.SurfaceEvent) {
 // touchOver draws what fingers have over the frame, and tells the system
 // what the frame takes.
 func (rt *engine) touchOver(p *Painter) {
+	rt.editMenuLeft()
 	rt.paintHandles(p)
 	rt.tellBack()
 }

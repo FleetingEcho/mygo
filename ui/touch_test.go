@@ -80,6 +80,115 @@ func TestTouchPans(t *testing.T) {
 	}
 }
 
+// A finger that lands on a fling stops it and taps nothing, but pans once
+// it moves past the slop, as UIKit's scroll views follow the finger that
+// stops their deceleration: flicking again and again keeps the content
+// going (#2003).
+func TestTouchPansAfterCatchingFling(t *testing.T) {
+	var s ScrollState
+	clicks := 0
+	tt := coreNewTester(func(c *context) {
+		coreScroll(c).Fill().TrackScroll(&s).Children(func() {
+			if coreBox(c).Height(5000).Shrink(0).Clicked() {
+				clicks++
+			}
+		})
+	}, 200, 200)
+	flick := func() {
+		tt.FingerDown(100, 150)
+		tt.Advance(16 * time.Millisecond)
+		tt.FingerMove(100, 100)
+		tt.Advance(16 * time.Millisecond)
+		tt.FingerUp(100, 40)
+	}
+	flick()
+	// Whole frames (60 Hz), for the frame of the finger's landing not to
+	// come too soon after the last, which TestTouchFlingSurvivesFrameTooSoon
+	// tests.
+	tt.Advance(3 * (time.Second / 60))
+	if !tt.rt.flinging.on {
+		t.Fatalf("no fling after a flick: at %v", s.Y)
+	}
+	// The finger stops it.
+	tt.FingerDown(100, 150)
+	caught := s.Y
+	tt.Advance(50 * time.Millisecond)
+	if tt.rt.flinging.on || s.Y != caught {
+		t.Fatalf("the finger did not stop the fling: at %v, was %v", s.Y, caught)
+	}
+	// Within the slop it moves nothing; past it, the content follows it
+	// from there.
+	tt.FingerMove(100, 146)
+	tt.FingerMove(100, 140)
+	if s.Y != caught {
+		t.Errorf("within and at the slop: at %v, was %v", s.Y, caught)
+	}
+	tt.Advance(16 * time.Millisecond)
+	tt.FingerMove(100, 100)
+	if s.Y != caught+40 {
+		t.Errorf("dragged 40 up after catching the fling: at %v, want %v", s.Y, caught+40)
+	}
+	// Lifted as it moves, it flings again, and clicked nothing.
+	tt.Advance(16 * time.Millisecond)
+	tt.FingerUp(100, 40)
+	if !tt.rt.flinging.on {
+		t.Errorf("no fling after the second flick")
+	}
+	tt.Advance(10 * time.Second)
+	if clicks != 0 {
+		t.Errorf("flicks clicked: %d clicks", clicks)
+	}
+	// A finger that catches a fling and lifts without moving still taps
+	// nothing, and stays swallowed within the slop.
+	s.Y = 0
+	tt.Frame()
+	tt.Advance(time.Second)
+	flick()
+	tt.Advance(16 * time.Millisecond)
+	tt.FingerDown(100, 100)
+	tt.FingerMove(100, 95)
+	stopped := s.Y
+	tt.FingerUp(100, 95)
+	tt.Advance(time.Second)
+	if s.Y != stopped || clicks != 0 {
+		t.Errorf("a tap on a fling: moved from %v to %v, %d clicks", stopped, s.Y, clicks)
+	}
+}
+
+// A frame too soon after the last to move a fling (its decay rounds to
+// none in float32) leaves the fling going, its time adding up to the next
+// frame, rather than ending it as if the content had reached its end
+// (#2003).
+func TestTouchFlingSurvivesFrameTooSoon(t *testing.T) {
+	var s ScrollState
+	tt := coreNewTester(func(c *context) {
+		coreScroll(c).Fill().TrackScroll(&s).Children(func() {
+			coreBox(c).Height(5000).Shrink(0)
+		})
+	}, 200, 200)
+	tt.FingerDown(100, 150)
+	tt.Advance(16 * time.Millisecond)
+	tt.FingerMove(100, 100)
+	tt.Advance(16 * time.Millisecond)
+	tt.FingerUp(100, 40)
+	f := &tt.rt.flinging
+	if !f.on {
+		t.Fatalf("no fling after a flick")
+	}
+	at, vy, was := f.at, f.vy, s.Y
+	tt.rt.flingStep(at.Add(time.Nanosecond))
+	if !f.on {
+		t.Fatalf("a frame 1ns after the last ended the fling")
+	}
+	if f.at != at || f.vy != vy || s.Y != was {
+		t.Errorf("a frame that moved nothing changed the fling: at %v (was %v), vy %v (was %v), scrolled to %v (was %v)", f.at, at, f.vy, vy, s.Y, was)
+	}
+	tt.Advance(50 * time.Millisecond)
+	if s.Y <= was {
+		t.Errorf("the fling did not go on: at %v, was %v", s.Y, was)
+	}
+}
+
 // A scroll container reaching the bottom of the safe area goes on under
 // the bottom inset, as UIKit's under a floating tab bar, and scrolls as
 // far again; what does not scroll stays clear of the insets.
@@ -566,5 +675,135 @@ func TestTouchReach(t *testing.T) {
 	tt.Frame()
 	if clicks != 1 {
 		t.Errorf("far from it: %d clicks", clicks)
+	}
+}
+
+// menuSurface is a touch screen's system, which notes whether its edit menu
+// shows.
+type menuSurface struct {
+	shows        bool
+	shown, hides int
+}
+
+func (m *menuSurface) Haptic(string)                           {}
+func (m *menuSurface) ShowEditMenu(float64, float64, []string) { m.shows = true; m.shown++ }
+func (m *menuSurface) HideEditMenu()                           { m.shows = false; m.hides++ }
+func (m *menuSurface) ShowMagnifier(float64, float64)          {}
+func (m *menuSurface) HideMagnifier()                          {}
+func (m *menuSurface) SetBackAvailable(bool)                   {}
+
+// The system's edit menu, which a tap on the caret shows, goes as the input
+// it was for goes (#2249), as a finger lands elsewhere, as keys type, and as
+// the caret is tapped again.
+func TestTouchEditMenuGoes(t *testing.T) {
+	v, open := "", true
+	m := &menuSurface{}
+	tt := coreNewTester(func(c *context) {
+		coreColumn(c).Fill().Children(func() {
+			coreBox(c).Height(100).Shrink(0)
+			if open {
+				coreTextInput(c, &v).Width(200).AutoFocus()
+			}
+		})
+	}, 300, 300)
+	tt.h.touch = m
+	tt.Frame()
+	tt.Frame()
+	tap := func(x, y float32) {
+		tt.Advance(time.Second)
+		tt.FingerDown(x, y)
+		tt.FingerUp(x, y)
+		tt.Frame()
+	}
+	menu := func(at float32) {
+		t.Helper()
+		// Once to place the caret, where it isn't yet.
+		if tap(20, at); !m.shows {
+			tap(20, at)
+		}
+		if !m.shows {
+			t.Fatalf("tapped twice on the caret: no menu (%d shown)", m.shown)
+		}
+	}
+	menu(110)
+	// Tapped once more on the caret, it goes, as on phones.
+	tap(20, 110)
+	if m.shows {
+		t.Errorf("the caret tapped again: the menu stays")
+	}
+	// A finger landing elsewhere takes it away.
+	menu(110)
+	tap(20, 250)
+	if m.shows {
+		t.Errorf("a tap elsewhere: the menu stays")
+	}
+	// Typing does.
+	menu(110)
+	tt.Type("a")
+	tt.Frame()
+	if m.shows {
+		t.Errorf("typed: the menu stays")
+	}
+	// The input going, as a dialog holding it closes, does.
+	menu(110)
+	open = false
+	tt.Frame()
+	if m.shows {
+		t.Errorf("the input gone: the menu stays")
+	}
+	tt.Frame()
+	if m.hides != 4 {
+		t.Errorf("hidden %d times, want 4", m.hides)
+	}
+}
+
+// As in #2249: the menu of an input in a dialog goes as Save closes it, and
+// as the dialog closes without a finger, too.
+func TestTouchEditMenuGoesWithDialog(t *testing.T) {
+	v, open := "", true
+	m := &menuSurface{}
+	var in, save *node
+	tt := coreNewTester(func(c *context) {
+		coreModal(c, &open, func() {
+			coreColumn(c).Width(200).Children(func() {
+				in = coreTextInput(c, &v).AutoFocus()
+				save = corePrimaryButton(c, "Save")
+				if save.Clicked() {
+					open = false
+				}
+			})
+		})
+	}, 400, 400)
+	tt.h.touch = m
+	tt.Frame()
+	tt.Frame()
+	tap := func(r Rect) {
+		tt.Advance(time.Second)
+		tt.FingerDown(r.X+10, r.Y+r.H/2)
+		tt.FingerUp(r.X+10, r.Y+r.H/2)
+		tt.Frame()
+	}
+	menu := func() {
+		t.Helper()
+		if tap(in.Bounds()); !m.shows {
+			tap(in.Bounds())
+		}
+		if !m.shows {
+			t.Fatal("no menu")
+		}
+	}
+	menu()
+	tap(save.Bounds())
+	if open || m.shows {
+		t.Errorf("Save tapped: open %v, the menu shows %v", open, m.shows)
+	}
+	open = true
+	tt.Frame()
+	tt.Frame()
+	menu()
+	open = false
+	tt.Frame()
+	if m.shows {
+		t.Error("the dialog closed: the menu stays")
 	}
 }

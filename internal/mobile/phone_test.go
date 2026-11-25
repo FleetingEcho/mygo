@@ -2,6 +2,7 @@ package mobile
 
 import (
 	"bytes"
+	"slices"
 	"sync"
 	"testing"
 
@@ -87,6 +88,18 @@ func surfaceWindow(t *testing.T, b *Backend, h *fakeHost) (*window, *surfaceEven
 		w.width, w.height = 400, 800
 	})
 	return w, wh
+}
+
+// settle waits until the main thread has handled the events the host sent,
+// as onMain does not: what it runs may come before them. They are handled in
+// order, so the answer to one more, of no window, comes after them.
+func settle(h *fakeHost) {
+	h.onUI(func() {
+		deliver(encodeEvent(func(wr *wire.Writer) {
+			wr.Uvarint(wire.EventAccessibilityTree)
+			wr.Int(0)
+		}), true)
+	})
 }
 
 // The keyboard edits the document through its client, by UTF-16 offsets, and
@@ -190,7 +203,7 @@ func TestNoFramesInBackground(t *testing.T) {
 				wr.Int(w.id)
 			}), true)
 		})
-		onMain(b, func() {})
+		settle(h)
 	}
 	bg := func(on bool) {
 		h.onUI(func() {
@@ -214,6 +227,33 @@ func TestNoFramesInBackground(t *testing.T) {
 	h.mu.Unlock()
 	bg(false)
 	wait.Until(t, "the frame to be asked for", func() bool { return h.called(wire.CallRequestFrame) })
+}
+
+// The display's refreshes send paced frames, which the content may leave to
+// draw once the renderer has a drawable, off the main thread; FrameNow draws
+// that one at once, not paced.
+func TestRefreshesArePaced(t *testing.T) {
+	b, h := startBackend(t)
+	w, wh := surfaceWindow(t, b, h)
+	h.onUI(func() {
+		deliver(encodeEvent(func(wr *wire.Writer) {
+			wr.Uvarint(wire.EventFrame)
+			wr.Int(w.id)
+		}), true)
+	})
+	settle(h)
+	onMain(b, func() { w.s.FrameNow() })
+	wh.mu.Lock()
+	defer wh.mu.Unlock()
+	var paced []bool
+	for _, e := range wh.events {
+		if e.Kind == platform.SurfaceFrame {
+			paced = append(paced, e.Paced)
+		}
+	}
+	if len(paced) != 2 || !paced[0] || paced[1] {
+		t.Fatalf("frames paced: %v, want [true false]", paced)
+	}
 }
 
 // A link the app is opened with, sent before the app made its backend, reaches
@@ -329,5 +369,78 @@ func TestFourFingers(t *testing.T) {
 	}
 	if n := wh.kinds(platform.KeyPressed); n != 1 {
 		t.Errorf("with them, %d keys", n)
+	}
+}
+
+// The frame rate the content asks for reaches the host, for its display link
+// to tick as often, and 0 has it tick at the display's rate again.
+func TestFrameRateReachesHost(t *testing.T) {
+	b, h := startBackend(t)
+	w, _ := surfaceWindow(t, b, h)
+	var mu sync.Mutex
+	var rates []float64
+	h.mu.Lock()
+	h.answer = func(op uint64, r *wire.Reader) []byte {
+		if op == wire.CallSetFrameRate && r.Int() == w.id {
+			mu.Lock()
+			rates = append(rates, r.Float())
+			mu.Unlock()
+		}
+		return nil
+	}
+	h.mu.Unlock()
+	onMain(b, func() {
+		w.s.SetFrameRate(30)
+		w.s.SetFrameRate(0)
+	})
+	got := func() []float64 {
+		mu.Lock()
+		defer mu.Unlock()
+		return slices.Clone(rates)
+	}
+	wait.Until(t, "the host to hear of both rates", func() bool { return len(got()) == 2 })
+	if r := got(); r[0] != 30 || r[1] != 0 {
+		t.Errorf("rates %v, want [30 0]", r)
+	}
+}
+
+// On Android the content makes its EGL surface anew as the native surface
+// changes size, as the screen rotates (#2219), but not as the display's
+// refresh rate changes; on iOS a resize renews nothing.
+func TestResizeRenewsSurface(t *testing.T) {
+	for _, android := range []bool{true, false} {
+		was := renewsOnResize
+		renewsOnResize = android
+		b, h := startBackend(t)
+		w, wh := surfaceWindow(t, b, h)
+		onMain(b, func() { w.s.handle = 0 })
+		changed := func(handle int, width, height, refresh float64) {
+			h.onUI(func() {
+				deliver(encodeEvent(func(wr *wire.Writer) {
+					wr.Uvarint(wire.EventSurfaceChanged)
+					wr.Int(w.id)
+					wr.Int(handle)
+					wr.Float(width)
+					wr.Float(height)
+					wr.Float(2)
+					wr.Float(refresh)
+				}), true)
+			})
+			settle(h)
+		}
+		changed(7, 400, 800, 60)
+		changed(7, 400, 800, 120)
+		if n := wh.kinds(platform.SurfaceRenew); n != 0 {
+			t.Fatalf("android %v: %d renewals of a surface made, its rate changed", android, n)
+		}
+		changed(7, 800, 400, 120)
+		want := 0
+		if android {
+			want = 1
+		}
+		if n := wh.kinds(platform.SurfaceRenew); n != want {
+			t.Fatalf("android %v: %d renewals after a rotation, want %d", android, n, want)
+		}
+		renewsOnResize = was
 	}
 }

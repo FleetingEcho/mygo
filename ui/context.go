@@ -70,6 +70,7 @@ type context struct {
 	// and dividers those drawing lines between their children.
 	transitions []transitionUse
 	dividers    []dividers
+	splits      []splitBuild
 	// childExits are the Exits that elements gave their children going
 	// in this frame (ChildExit).
 	childExits []childExit
@@ -141,6 +142,8 @@ func (c *context) reset(now time.Time, w, h float32) {
 	c.sortedUses = c.sortedUses[:0]
 	clear(c.dividers)
 	c.dividers = c.dividers[:0]
+	clear(c.splits)
+	c.splits = c.splits[:0]
 	clear(c.childExits)
 	c.childExits = c.childExits[:0]
 	c.router, c.routers, c.inert = nil, 0, false
@@ -223,6 +226,7 @@ func (c *context) overlayRoot() *node {
 		o.flags = flagAbsolute | flagPassThrough
 		o.dir = c.root.dir
 		o.inset = [4]length{px(0), px(0), px(0), px(0)}
+		o.insetSet = true
 		o.depth = 1
 		o.st = c.rt.stateFor(o.id)
 		c.overlay = o
@@ -273,6 +277,9 @@ func (c *context) rekey(e *node, k any) {
 	}
 	id := keyedID(parent, k)
 	rt := c.rt
+	if e.stateRead {
+		rt.lateKey(id, k)
+	}
 	if id != e.id {
 		rt.unlook(e.st)
 	}
@@ -526,7 +533,10 @@ func (c *context) Invalidate() { c.rt.host.invalidate() }
 // it, for something moving. Call it in every frame while it moves. A
 // drawing that moves while the layout stays asks with
 // Painter.AnimationFrame instead, whose frames do not build the view.
-func (c *context) AnimationFrame() { c.rt.animating = true }
+func (c *context) AnimationFrame() {
+	c.rt.animating = true
+	c.rt.frameAhead()
+}
 
 // DisableAnimations makes the values that animate in this frame
 // (AnimateTo, Animate, Spring), the element transitions and the pages of
@@ -662,6 +672,7 @@ func (c *context) ShortcutRepeated() bool { return c.rt.shortcutRepeat }
 // closed, and Close's error is ignored. Keep a value the element must not
 // close, as one the app shares, in the app's state.
 func coreLocal[T any](e *node, key any, init func() T) *T {
+	e.markStateRead()
 	v, made := keepLocal(e.st, key, init)
 	if made {
 		closeWithState(e.st, v)

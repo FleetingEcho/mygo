@@ -19,6 +19,9 @@ import (
 type surface struct {
 	w      *window
 	handle uintptr
+	// width and height are the native surface's size, as the host last
+	// told of it (SurfaceChanged).
+	width, height float64
 	// refresh is how many times a second the display refreshes.
 	refresh float64
 
@@ -51,6 +54,15 @@ type surface struct {
 	access     *platform.AccessTree
 	accessOn   bool
 }
+
+// renewsOnResize tells that the content makes its GPU renderer's surface
+// anew on the native surface as its size changes, on Android, as
+// GLSurfaceView and Flutter make their EGL surfaces: the driver takes the
+// buffers' size and rotation (the transform hint) as an EGL surface is
+// made, and one made before the screen rotated draws the next frame at the
+// old size or rotation, which the system drops (#2219). The host holds the
+// window's draw back until the frame on the new one (FirstFrame).
+var renewsOnResize = runtime.GOOS == "android"
 
 func newSurface(w *window) *surface {
 	return &surface{w: w, refresh: 60, fingers: map[int][2]float64{}}
@@ -125,9 +137,36 @@ func (s *surface) RequestFrame() {
 
 func (s *surface) RefreshRate() float64 { return s.refresh }
 
-// frame draws the frame the content asked for, at a refresh.
+// frame draws the frame the content asked for, at a refresh. Frames
+// following each other come at the display's refreshes (Paced), as macOS's
+// display link's do: one the GPU renderer cannot draw yet, as the drawable
+// it fetches for the last is not free until the display lets one go, waits
+// for it off the main thread and draws once it is (FrameNow), rather than
+// block Go's main thread most of a refresh, while the fingers that move
+// meanwhile wait for it.
 func (s *surface) frame() {
 	s.pending = false
+	s.draw(true)
+}
+
+// FrameNow draws a frame at once, for one a refresh left to draw until the
+// renderer had a drawable (platform.PacedSurface).
+func (s *surface) FrameNow() { s.draw(false) }
+
+var _ platform.PacedSurface = (*surface)(nil)
+
+// FrameAhead: on Android, a frame asked for goes through the pipe to the
+// UI thread before Choreographer asks for the next refresh, so the content
+// asks for its next frame as it starts one while it animates
+// (platform.FrameAheadSurface). pending, and the host's own, coalesce the
+// request the frame's end makes. iOS's display link asks at once.
+func (s *surface) FrameAhead() bool { return runtime.GOOS == "android" }
+
+var _ platform.FrameAheadSurface = (*surface)(nil)
+
+// draw sends the content a frame, paced or not, unless there is nothing
+// to draw on.
+func (s *surface) draw(paced bool) {
 	if s.gone || s.handle == 0 || s.w.width == 0 {
 		return
 	}
@@ -137,7 +176,7 @@ func (s *surface) frame() {
 		s.deferred = true
 		return
 	}
-	s.send(platform.SurfaceEvent{Kind: platform.SurfaceFrame})
+	s.send(platform.SurfaceEvent{Kind: platform.SurfaceFrame, Paced: paced})
 	if s.text.Active {
 		s.syncText()
 	}
@@ -150,6 +189,21 @@ func (s *surface) foreground() {
 		s.RequestFrame()
 	}
 }
+
+// SetFrameRate has the host's display link tick fps times a second while
+// frames follow each other, or at the display's rate for 0
+// (platform.FrameRateSurface): on a ProMotion display, the display then
+// refreshes as often, and a drawing asking for fewer frames
+// (Painter.AnimationFrameRate) wakes the app no more often than it draws.
+// Android's Choreographer ticks at the display's rate whatever it is told.
+func (s *surface) SetFrameRate(fps float64) {
+	if s.gone {
+		return
+	}
+	s.w.b.call(&wire.SetFrameRate{ID: s.w.id, FPS: fps}, nil)
+}
+
+var _ platform.FrameRateSurface = (*surface)(nil)
 
 // PresentPixels has nothing to show frames drawn in memory on: phones
 // draw with their GPUs.
@@ -228,6 +282,8 @@ func (s *surface) Haptic(kind string) { s.w.b.Haptic(kind) }
 func (s *surface) ShowEditMenu(x, y float64, actions []string) {
 	s.w.b.call(&wire.ShowMenu{ID: s.w.id, X: x, Y: y, Actions: actions}, nil)
 }
+
+func (s *surface) HideEditMenu() { s.w.b.call(&wire.HideMenu{ID: s.w.id}, nil) }
 
 func (s *surface) SetBackAvailable(on bool) {
 	s.w.b.call(&wire.SetBackAvailable{ID: s.w.id, On: on}, nil)
@@ -584,7 +640,9 @@ func (b *Backend) handleSurface(op uint64, r *wire.Reader, w *wire.Writer) bool 
 			if e.Refresh > 0 {
 				s.refresh = e.Refresh
 			}
-			if old != 0 && s.handle != old {
+			resized := e.Width != s.width || e.Height != s.height
+			s.width, s.height = e.Width, e.Height
+			if old != 0 && (s.handle != old || resized && renewsOnResize) {
 				s.send(platform.SurfaceEvent{Kind: platform.SurfaceRenew})
 			}
 			if s.handle != 0 {
@@ -596,7 +654,8 @@ func (b *Backend) handleSurface(op uint64, r *wire.Reader, w *wire.Writer) bool 
 		e.Decode(r)
 		if s := sf(e.ID); s != nil && s.handle != 0 {
 			s.handle = 0
-			// The content lets go of its renderer at once.
+			// The content lets go of what draws into the surface at once:
+			// on Android its EGL surface, keeping the context for the next.
 			s.send(platform.SurfaceEvent{Kind: platform.SurfaceRenew})
 		}
 	case wire.EventTouch:

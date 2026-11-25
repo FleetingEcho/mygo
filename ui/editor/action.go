@@ -37,11 +37,11 @@ type RenameRequest struct {
 
 // codeActions is the menu of what can be done to the text at the caret.
 type codeActions struct {
-	shown   bool
-	asked   int // the offset a request was made for
-	actions []CodeAction
-	at      int // where the menu sits
-	chosen  int // the index in actions the arrows chose
+	shown    bool
+	asked    int // the offset a request was made for
+	actions  []CodeAction
+	at       int // where the menu sits
+	chosen   int // the index in actions the arrows chose
 	scrollTo bool
 }
 

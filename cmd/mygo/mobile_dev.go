@@ -105,10 +105,14 @@ func (s *devSession) buildAndLaunchMobile(ctx context.Context, t *task, running 
 
 	var app string
 	var prof *profile
+	var exts []*iosExtension
 	switch s.device.platform {
 	case "ios":
 		tc, err := newIOSToolchain(c, !s.device.physical)
 		if err != nil {
+			return nil, sum, err
+		}
+		if exts, err = iosExtensions(c, dc); err != nil {
 			return nil, sum, err
 		}
 		if s.device.physical {
@@ -122,8 +126,11 @@ func (s *devSession) buildAndLaunchMobile(ctx context.Context, t *task, running 
 				d.IOS.AssociatedDomains = nil
 				dc = &d
 			}
+			if err := pickExtensionProfiles(dc, exts, "development", s.device.id, prof); err != nil {
+				return nil, sum, err
+			}
 		}
-		if app, err = tc.buildApp(ctx, c, dc, t, opts, stage); err != nil {
+		if app, err = tc.buildApp(ctx, c, dc, t, opts, stage, exts); err != nil {
 			return nil, sum, err
 		}
 	case "android":
@@ -149,7 +156,7 @@ func (s *devSession) buildAndLaunchMobile(ctx context.Context, t *task, running 
 	if s.device.platform == "ios" {
 		t.set("signing")
 		if prof != nil {
-			err = prof.sign(work, app, dc)
+			err = prof.sign(work, app, dc, exts)
 		} else {
 			err = signForSimulator(app)
 		}
@@ -332,8 +339,19 @@ func (s *devSession) launchMobile(dc *Config, app string) (*devProcess, error) {
 		// The lines of the app's, without the system's noise about it.
 		sc := bufio.NewScanner(r)
 		sc.Buffer(make([]byte, 4096), 1<<20)
+		var logcat *androidLog
+		if s.device.platform == "android" {
+			logcat = &androidLog{}
+		}
 		for sc.Scan() {
-			if l := sc.Text(); !mobileNoise(l, dc.Identifier) {
+			l := sc.Text()
+			if logcat != nil {
+				var show bool
+				if l, show = logcat.line(l); !show {
+					continue
+				}
+			}
+			if !mobileNoise(l, dc.Identifier) {
 				io.WriteString(out, l+"\n")
 			}
 		}

@@ -54,7 +54,10 @@ type DiffState struct {
 	// Wrap wraps long lines rather than scrolling them sideways.
 	Wrap bool
 	// FitContent makes the viewer as high as its lines, as a file of a
-	// list of them, rather than scrolling them itself.
+	// list of them, rather than scrolling them itself. The containers
+	// around it scroll it: its find bar and go to line bring their text
+	// into view through them, and the bars stick to the top of the part
+	// of the diff those containers show.
 	FitContent bool
 	// ScrollPastEnd lets the lines scroll up until the last is at the top,
 	// as State's do unless NoScrollPastEnd, so that GoToHunk can bring a
@@ -481,13 +484,13 @@ func blockTop(h *heights, line int, below bool, is func(b *block) bool) (float64
 func (d *DiffState) deletedTop(line int) float64 {
 	ed := &d.eds[1]
 	h := &ed.view.heights
-	n := h.n
+	n := d.shownLines(ed.view.text)
 	for i, hk := range d.model.hunks {
 		if line < hk.A0 || line >= hk.A1 {
 			continue
 		}
 		// Where prepare put the block: above the change's first new line,
-		// or below the last line of the text.
+		// or below the last line the diff shows.
 		at, below := hk.B0, false
 		if at >= n {
 			at, below = n-1, true
@@ -639,8 +642,10 @@ func DiffView(c *ui.Context, d *DiffState) ui.Element {
 	t := c.Theme()
 	ct := d.Theme.resolve(t)
 	opts := d.sideOptions
-	d.sides[0] = diffSide{d: d, old: true, hide: d.sides[0].hide, blks: d.sides[0].blks}
-	d.sides[1] = diffSide{d: d, unified: d.Layout == DiffUnified, hide: d.sides[1].hide, blks: d.sides[1].blks}
+	// The sides are made again each build, and keep the version of their
+	// hidden lines across them, for the find bar's matches to hold of it.
+	d.sides[0] = diffSide{d: d, old: true, hide: d.sides[0].hide, blks: d.sides[0].blks, hideV: d.sides[0].hideV}
+	d.sides[1] = diffSide{d: d, unified: d.Layout == DiffUnified, hide: d.sides[1].hide, blks: d.sides[1].blks, hideV: d.sides[1].hideV}
 	if d.Layout == DiffUnified {
 		d.oldView.setTheme(ct)
 		d.oldView.setBuffer(d.Old)

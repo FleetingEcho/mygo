@@ -295,6 +295,10 @@ func (ed *editor) textAt(x, y float32) int {
 		return -1
 	}
 	cx, cy := ed.toContent(x, y)
+	// An app's block is over no text.
+	if b, _, ok := ed.blockAt(cy); ok && b.kind == blockApp {
+		return -1
+	}
 	off := ed.offsetAt(cx, cy)
 	if cr, ok := ed.caretRect(off); !ok || float64(cy) > float64(cr.Y+cr.H) ||
 		off == ed.view.text.LineEnd(ed.view.text.LineOf(off)) && cx > cr.X+ed.view.charWidth/2 {
@@ -557,7 +561,7 @@ func (ed *editor) scrollbars() (vertical, horizontal bool) {
 		return false, false
 	}
 	vertical = !ed.o.noScrollbar && !ed.o.fitContent && ed.scrollMax() > 0
-	return vertical, !ed.view.wrap && ed.view.maxLine > ed.hTrack()
+	return vertical, !ed.view.wrap && ed.contentWidth() > ed.hTrack()
 }
 
 // hTrack is the length of the horizontal scroll bar's track: the text's
@@ -566,8 +570,17 @@ func (ed *editor) hTrack() float32 {
 	return ed.r.W - ed.textX - ed.trackWidth()
 }
 
+// contentWidth is how wide the lines are that scroll sideways: the
+// widest the view knows, or as the last frame painted them, while an edit
+// since may have left the widest unmeasured until the next frame lays
+// out the lines in view, and brings the offset into their range.
+func (ed *editor) contentWidth() float32 {
+	return max(ed.paintedW, ed.view.measured.widest())
+}
+
+// maxScrollX is how far the content scrolls right.
 func (ed *editor) maxScrollX() float32 {
-	return max(0, ed.view.maxLine+ed.view.charWidth*4-(ed.r.W-ed.textX))
+	return max(0, ed.contentWidth()+ed.view.charWidth*4-(ed.r.W-ed.textX))
 }
 
 // scrollbarPress grabs a thumb, or jumps to where the track was pressed.
@@ -618,7 +631,7 @@ func (ed *editor) bar(horizontal bool) ui.Scrollbar {
 		return ui.Scrollbar{
 			Box:        ui.Rect{X: ed.textX, W: ed.hTrack(), H: ed.hbarY + style.TrackWidth},
 			Horizontal: true,
-			View:       ed.r.W - ed.textX, Content: ed.view.maxLine + ed.view.charWidth*4, Offset: ed.scrollX,
+			View:       ed.r.W - ed.textX, Content: ed.contentWidth() + ed.view.charWidth*4, Offset: ed.scrollX,
 			Style: style,
 		}
 	}
@@ -899,6 +912,16 @@ func (ed *editor) UnmarkText() {
 	}
 }
 
+// SetTextSelection moves the selection, as an on-screen keyboard's cursor
+// does (ui.TextInputSelectionSetter): to one selection, leaving what was
+// composed in as it is.
+func (ed *editor) SetTextSelection(r ui.TextInputRange) {
+	ed.sync()
+	ed.UnmarkText()
+	t := &ed.view.text
+	ed.setSels([]sel{ed.newSel(t.FromUTF16(r.Start), t.FromUTF16(r.End))}, revealFit)
+}
+
 func (ed *editor) BoundsForRange(r ui.TextInputRange) (ui.Rect, ui.TextInputRange, bool) {
 	ed.sync()
 	t := &ed.view.text
@@ -908,7 +931,7 @@ func (ed *editor) BoundsForRange(r ui.TextInputRange) (ui.Rect, ui.TextInputRang
 		return ui.Rect{}, r, false
 	}
 	x := ed.textX + cr.X - ed.scrollX
-	y := float32(float64(cr.Y) - ed.scrollY) + ed.sticky
+	y := float32(float64(cr.Y)-ed.scrollY) + ed.sticky
 	if y+cr.H < 0 || y > ed.viewH {
 		return ui.Rect{}, r, false
 	}

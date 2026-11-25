@@ -320,6 +320,20 @@ export interface IOSConfig {
   launchScreen?: IOSLaunchScreen;
   /** The app's `UIBackgroundModes`, as `audio`, `fetch` or `remote-notification`, with those its plugins ask for. */
   backgroundModes?: string[];
+  /**
+   * App extensions built apart, as a Network Extension's packet tunnel built
+   * with Xcode, which the app carries in `PlugIns/`, each signed with its own
+   * provisioning profile before the app.
+   */
+  extensions?: IOSExtension[];
+}
+
+/** A prebuilt app extension of the iOS app. */
+export interface IOSExtension {
+  /** The `.appex`, whose identifier starts with the app's and a dot, as `com.example.app.tunnel`. */
+  path: string;
+  /** The profile to sign it with for `distribution`: its name, UUID or the path of a `.mobileprovision` (default: the installed profile that best fits its identifier and the distribution, with the app's certificate). */
+  provisioningProfile?: string;
 }
 
 /** The launch screen of the iOS app: at least one of its fields. */
@@ -352,6 +366,26 @@ export interface AndroidConfig {
   adaptiveIcon?: AndroidAdaptiveIcon;
   /** The color of the screen the system shows while the app starts, as `#102030` (default: the theme's). */
   splash?: string;
+  /**
+   * Has the installer extract the app's native libraries to `nativeLibraryDir`,
+   * the one place an app may exec its own files from: for an executable that
+   * ships as `lib<name>.so` in a native module's `jniLibs` (default: `false`,
+   * they stay in the APK).
+   */
+  extractNativeLibs?: boolean;
+  /**
+   * The ABIs the app is built for, as `arm64`, `arm` or `amd64` (or
+   * `arm64-v8a`, `armeabi-v7a`, `x86_64`): for an app whose native modules
+   * ship prebuilt libraries for some only. The APK then carries no library of
+   * another ABI (default: all three).
+   */
+  abis?: string[];
+  /**
+   * Signs the APK with the JAR signature (v1) as well, which the build leaves
+   * out from `minSdk` 24 but some phones' installers still ask for
+   * (default: `false`).
+   */
+  v1Signing?: boolean;
 }
 
 /** An icon of two layers. */

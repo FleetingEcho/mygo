@@ -279,6 +279,22 @@ type IOS struct {
 	// BackgroundModes are the app's UIBackgroundModes, as "audio", "fetch"
 	// or "remote-notification", with those its plugins ask for.
 	BackgroundModes []string `json:"backgroundModes"`
+	// Extensions are app extensions built apart, as a Network Extension's
+	// packet tunnel built with Xcode, which the app carries in PlugIns/,
+	// each signed with its own provisioning profile before the app.
+	Extensions []IOSExtension `json:"extensions"`
+}
+
+// IOSExtension is a prebuilt app extension of the iOS app.
+type IOSExtension struct {
+	// Path is the .appex, whose identifier starts with the app's and a
+	// dot, as com.example.app.tunnel.
+	Path string `json:"path"`
+	// ProvisioningProfile is the profile to sign it with for
+	// ios.distribution: its name, UUID or the path of a .mobileprovision
+	// (default: the installed profile that best fits its identifier and the
+	// distribution, with the app's certificate).
+	ProvisioningProfile string `json:"provisioningProfile"`
 }
 
 // IOSLaunchScreen is the app's launch screen, which has no storyboard: a
@@ -321,6 +337,23 @@ type Android struct {
 	// Splash is the color of the screen the system shows while the app
 	// starts, as "#102030" (default: the theme's).
 	Splash string `json:"splash"`
+	// ExtractNativeLibs has the installer extract the app's native
+	// libraries to nativeLibraryDir, the one place an app may exec its own
+	// files from: for an executable that ships as lib<name>.so in a native
+	// module's jniLibs. By default they stay in the APK, uncompressed, and
+	// are loaded from it.
+	ExtractNativeLibs bool `json:"extractNativeLibs"`
+	// ABIs are those the app is built for, as "arm64", "arm" or "amd64"
+	// (or "arm64-v8a", "armeabi-v7a", "x86_64"): for an app whose native
+	// modules ship prebuilt libraries for some only, such as an executable
+	// it runs. The APK then carries no library of another ABI. Default:
+	// all three.
+	ABIs []string `json:"abis"`
+	// V1Signing signs the APK with the JAR signature (v1) as well as the
+	// newer schemes. Android does not need it from 7.0, so the build leaves
+	// it out from minSdk 24, but some phones' installers still refuse an
+	// APK without it.
+	V1Signing bool `json:"v1Signing"`
 }
 
 // AndroidAdaptiveIcon is an icon of two layers.
@@ -383,6 +416,23 @@ func readConfig(root string) (data []byte, file string, err error) {
 		return data, jsonFile, err
 	}
 	return nil, "", nil
+}
+
+// setVersion makes v the app's version, in place of mygo.json's (mygo build
+// -version): a release's tag, whose prefix is dropped, updates.tagPrefix or
+// else a leading v.
+func (c *Config) setVersion(v string) error {
+	v = strings.TrimSpace(v)
+	prefix := "v"
+	if c.Updates != nil && c.Updates.TagPrefix != "" {
+		prefix = c.Updates.TagPrefix
+	}
+	v = strings.TrimPrefix(v, prefix)
+	if v == "" || strings.ContainsFunc(v, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) || r == '/' || r == '\\' }) {
+		return fmt.Errorf("-version %q is not a version", v)
+	}
+	c.Version = v
+	return c.validate()
 }
 
 func (c *Config) validate() error {
@@ -512,6 +562,17 @@ func (c *Config) validateMobile() error {
 			return fmt.Errorf("ios.backgroundModes: %q is not a mode, as audio or fetch", m)
 		}
 	}
+	names := map[string]bool{}
+	for i, e := range c.IOS.Extensions {
+		if !strings.HasSuffix(strings.TrimRight(e.Path, `/\`), ".appex") {
+			return fmt.Errorf("ios.extensions[%d].path: %q is not an app extension, as build/PacketTunnel.appex", i, e.Path)
+		}
+		name := filepath.Base(e.Path)
+		if names[name] {
+			return fmt.Errorf("ios.extensions[%d].path: another extension is %s, which PlugIns/ holds one of", i, name)
+		}
+		names[name] = true
+	}
 	for _, h := range c.Android.AppLinks {
 		if !hostRe.MatchString(h) {
 			return fmt.Errorf("android.appLinks: %q is not a host, as example.com or *.example.com, without https://", h)
@@ -528,6 +589,11 @@ func (c *Config) validateMobile() error {
 	if c.Android.Splash != "" {
 		if _, err := parseHexColor(c.Android.Splash); err != nil {
 			return fmt.Errorf("android.splash: %w", err)
+		}
+	}
+	for _, a := range c.Android.ABIs {
+		if androidABI(a) == "" {
+			return fmt.Errorf("android.abis: %q is not an ABI, as arm64, arm or amd64", a)
 		}
 	}
 	return nil

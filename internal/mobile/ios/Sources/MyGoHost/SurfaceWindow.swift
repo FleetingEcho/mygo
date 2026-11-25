@@ -54,7 +54,7 @@ final class SurfaceWindow: HostWindow, UITextInput, UIPointerInteractionDelegate
         isMultipleTouchEnabled = true
         backgroundColor = .systemBackground
         let l = CADisplayLink(target: self, selector: #selector(tick))
-        l.preferredFrameRateRange = CAFrameRateRange(minimum: 30, maximum: 120, preferred: 120)
+        l.preferredFrameRateRange = SurfaceWindow.displayRate
         l.isPaused = true
         l.add(to: .main, forMode: .common)
         link = l
@@ -131,6 +131,17 @@ final class SurfaceWindow: HostWindow, UITextInput, UIPointerInteractionDelegate
     }
 
     func requestFrame() { link?.isPaused = false }
+
+    /// The link's rate while the content asks for a frame each refresh.
+    private static let displayRate = CAFrameRateRange(minimum: 30, maximum: 120, preferred: 120)
+
+    /// Has the link tick fps times a second while frames follow each other,
+    /// or at the display's rate for 0: a ProMotion display then refreshes as
+    /// often, and a drawing asking for fewer frames wakes the app no more.
+    func setFrameRate(_ fps: Double) {
+        let f = Float(fps)
+        link?.preferredFrameRateRange = fps > 0 ? CAFrameRateRange(minimum: f, maximum: f, preferred: f) : SurfaceWindow.displayRate
+    }
 
     @objc private func tick() {
         // One frame per request: Go asks again while it animates.
@@ -273,7 +284,20 @@ final class SurfaceWindow: HostWindow, UITextInput, UIPointerInteractionDelegate
         var rest = Set<UIPress>()
         for p in presses {
             guard let k = p.key else { rest.insert(p); continue }
-            let name = SurfaceWindow.keyNames[k.keyCode] ?? k.charactersIgnoringModifiers
+            let named = SurfaceWindow.keyNames[k.keyCode]
+            let plain = k.modifierFlags.isDisjoint(with: [.command, .control])
+            // A key typed while an input method composes is the input
+            // method's, as Enter choosing a candidate or Escape giving the
+            // composition up, as on macOS.
+            if editing && plain && markStart >= 0 { rest.insert(p); continue }
+            // While text input is on, a key typing text is the text
+            // system's too, whatever Go makes of it: UIKit types it with
+            // insertText(_:), or an input method's setMarkedText, only once
+            // the press reaches super, as macOS's input methods see every
+            // key (interpretKeyEvents:). Go takes a printable key as typing
+            // text that comes as text, and answers it handled.
+            let typing = editing && plain && (named == nil || k.keyCode == .keyboardSpacebar)
+            let name = named ?? k.charactersIgnoringModifiers
             var mods = 0
             if k.modifierFlags.contains(.shift) { mods |= 1 }
             if k.modifierFlags.contains(.control) { mods |= 2 }
@@ -282,8 +306,7 @@ final class SurfaceWindow: HostWindow, UITextInput, UIPointerInteractionDelegate
             let handled = Go.answer(Event.key(id: id, down: down, key: name, text: k.characters, mods: mods, repeated: false)) {
                 KeyReply(&$0).handled
             } ?? false
-            // Keys typing text while editing reach insertText too.
-            if !handled && !(editing && SurfaceWindow.keyNames[k.keyCode] == nil) { rest.insert(p) }
+            if typing || !handled { rest.insert(p) }
         }
         return rest
     }
@@ -605,6 +628,8 @@ final class SurfaceWindow: HostWindow, UITextInput, UIPointerInteractionDelegate
         cfg.preferredArrowDirection = .down
         editMenu.presentEditMenu(with: cfg)
     }
+
+    func hideMenu() { editMenu.dismissMenu() }
 
     override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
         switch action {
