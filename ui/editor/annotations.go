@@ -9,16 +9,17 @@ import (
 )
 
 // LineAnnotation is application text shown in a column to the left of the
-// line numbers, as a source line's commit summary and relative date. Line is
-// zero-based. Detail is kept at the column's right edge while Text is
-// ellipsized to the room left for it. An empty Text and Detail reserves only
-// the line for hover or gutter selection.
+// line numbers, as a source line's commit summary and date. Line is
+// zero-based. Date is laid out first, then Avatar and Text. Detail is kept
+// at the column's right edge while Text is ellipsized to the room left for it.
+// Empty fields reserve no extra space.
 //
 // SetLineAnnotations clears annotations when the buffer changes. Reapply them
 // once the new text has been attributed; stale annotations never follow edits
 // onto source lines they do not describe.
 type LineAnnotation struct {
 	Line   int
+	Date   string
 	Text   string
 	Detail string
 	Click  func()
@@ -49,7 +50,9 @@ type LineAnnotationAvatar struct {
 	Bitmap     func() *ui.Bitmap
 }
 
-const lineAnnotationActionWidth = float32(26)
+// The trailing action has 6 DIPs leading and 12 DIPs trailing clearance
+// around its 16-DIP glyph.
+const lineAnnotationActionWidth = float32(34)
 
 // SetLineAnnotations shows annotations to the left of the line numbers.
 // Entries may arrive in any order; the last one for a line wins.
@@ -60,6 +63,7 @@ func (st *State) SetLineAnnotations(annotations []LineAnnotation) {
 		if annotation.Line < 0 || annotation.Line >= st.ed.view.text.LineCount() {
 			continue
 		}
+		annotation.Date = singleLineAnnotation(annotation.Date)
 		annotation.Text = singleLineAnnotation(annotation.Text)
 		annotation.Detail = singleLineAnnotation(annotation.Detail)
 		if annotation.LastLine < annotation.Line {
@@ -225,10 +229,21 @@ func (ed *editor) paintLineAnnotation(p *ui.Painter, r ui.Rect, line int, y, hei
 	}
 	const horizontalPadding = float32(8)
 	const detailGap = float32(10)
+	const dateGap = float32(12)
 	x := r.X + horizontalPadding
 	width := ed.annotationW - horizontalPadding*2
 	if annotation.ActionClick != nil {
 		width -= lineAnnotationActionWidth
+	}
+	date := ""
+	dateWidth := float32(0)
+	if annotation.Date != "" {
+		date = ed.view.fitLineAnnotationText(annotation.Date, width*0.45)
+	}
+	if date != "" {
+		dateWidth = ed.view.shaped.get(date, ed.view.style).Width
+		x += dateWidth + dateGap
+		width -= dateWidth + dateGap
 	}
 	if avatar := annotation.Avatar; avatar != nil {
 		size := min(float32(18), ed.view.lineHeight*0.82)
@@ -243,6 +258,9 @@ func (ed *editor) paintLineAnnotation(p *ui.Painter, r ui.Rect, line int, y, hei
 	color := ed.theme.LineNumber
 	if active {
 		color = ed.theme.ActiveLineNumber
+	}
+	if date != "" {
+		ed.view.paintLineAnnotationText(p, date, r.X+horizontalPadding, y, color)
 	}
 	detail := ""
 	if annotation.Detail != "" {

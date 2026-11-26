@@ -39,6 +39,27 @@ func TestLineAnnotationsShareGutterAndClickWithoutMovingCaret(t *testing.T) {
 	}
 }
 
+func TestLineAnnotationLeadingDateAndActionMargin(t *testing.T) {
+	ct := newEditorTest(t, "", "|first\n")
+	ct.st.LineAnnotationWidth = 320
+	ct.st.SetLineAnnotations([]LineAnnotation{{
+		Line: 0, Date: "Mar 5,2020", Text: "Ada • an earlier change",
+		Avatar:      &LineAnnotationAvatar{Background: ui.RGB(0, 0, 255)},
+		ActionClick: func() {},
+	}})
+	ct.tt.Frame()
+	ed := &ct.st.ed
+	if got := ct.st.LineAnnotations()[0].Date; got != "Mar 5,2020" {
+		t.Fatalf("annotation date = %q, want one line", got)
+	}
+	dateWidth := ed.view.shaped.get("Mar 5,2020", ed.view.style).Width
+	avatarX := float32(8) + dateWidth + 12
+	r, g, b := ct.pixel(avatarX+2, ed.view.lineHeight/2)
+	if r > 50 || g > 50 || b < 200 {
+		t.Fatalf("avatar after the date is at the wrong position: pixel %d,%d,%d", r, g, b)
+	}
+}
+
 func TestLineAnnotationActionUsesSeparateClickArea(t *testing.T) {
 	ct := newEditorTest(t, "", "|first\nsecond\nthird\n")
 	ct.st.LineAnnotationWidth = 240
@@ -64,6 +85,16 @@ func TestLineAnnotationActionUsesSeparateClickArea(t *testing.T) {
 	}
 	if got := ct.st.CursorPos(); got.Line != 0 || got.Col != 0 {
 		t.Fatalf("annotation clicks moved the caret to %+v", got)
+	}
+	// Move to a row without an annotation so hover highlighting does not
+	// change the background under the trailing action's empty margin.
+	ct.tt.Move(ed.annotationW/2, ed.view.lineHeight*2.5)
+	ct.tt.Frame()
+	r, g, b := ct.pixel(ed.annotationW-4, y)
+	background := ed.theme.Background
+	if r != background.R || g != background.G || b != background.B {
+		t.Fatalf("the action has no trailing margin: pixel %d,%d,%d, want background %d,%d,%d at width %v",
+			r, g, b, background.R, background.G, background.B, ed.annotationW)
 	}
 }
 
