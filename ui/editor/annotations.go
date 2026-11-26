@@ -22,7 +22,23 @@ type LineAnnotation struct {
 	Text   string
 	Detail string
 	Click  func()
+	Avatar *LineAnnotationAvatar
+	// ActionClick shows a two-page action at the column's trailing edge, as
+	// "view blame prior to this change". Its hit area is separate from Click.
+	ActionClick func()
 }
+
+// LineAnnotationAvatar is a small author image at the start of an annotation.
+// Bitmap is an optional non-blocking cache lookup: nil keeps the generated
+// initial, allowing an image to appear on a later frame without rebuilding the
+// annotation. Background is the initial avatar's stable author color.
+type LineAnnotationAvatar struct {
+	Initial    string
+	Background ui.Color
+	Bitmap     func() *ui.Bitmap
+}
+
+const lineAnnotationActionWidth = float32(26)
 
 // SetLineAnnotations shows annotations to the left of the line numbers.
 // Entries may arrive in any order; the last one for a line wins.
@@ -96,6 +112,16 @@ func (ed *editor) lineAnnotationAt(x, y float32) *LineAnnotation {
 	return ed.lineAnnotationFor(line)
 }
 
+// lineAnnotationActionAt returns the annotation whose trailing action icon
+// contains x, y. The remaining annotation area keeps its ordinary Click.
+func (ed *editor) lineAnnotationActionAt(x, y float32) *LineAnnotation {
+	annotation := ed.lineAnnotationAt(x, y)
+	if annotation == nil || annotation.ActionClick == nil || x < ed.annotationW-lineAnnotationActionWidth {
+		return nil
+	}
+	return annotation
+}
+
 // fitLineAnnotationText shortens text to width without changing the app's
 // original annotation. Shaping the candidates keeps CJK and proportional fonts
 // within the column too.
@@ -152,6 +178,16 @@ func (ed *editor) paintLineAnnotation(p *ui.Painter, r ui.Rect, line int, y, hei
 	const detailGap = float32(10)
 	x := r.X + horizontalPadding
 	width := ed.annotationW - horizontalPadding*2
+	if annotation.ActionClick != nil {
+		width -= lineAnnotationActionWidth
+	}
+	if avatar := annotation.Avatar; avatar != nil {
+		size := min(float32(18), ed.view.lineHeight*0.82)
+		rect := ui.Rect{X: x, Y: y + (ed.view.lineHeight-size)/2, W: size, H: size}
+		ed.paintLineAnnotationAvatar(p, rect, avatar)
+		x += size + 6
+		width -= size + 6
+	}
 	if active {
 		p.Fill(ui.Rect{X: r.X, Y: y, W: ed.annotationW, H: height}, ed.theme.ActiveLine, 0)
 	}
@@ -176,6 +212,52 @@ func (ed *editor) paintLineAnnotation(p *ui.Painter, r ui.Rect, line int, y, hei
 	if detail != "" {
 		ed.view.paintLineAnnotationText(p, detail, x+width-detailWidth, y, color)
 	}
+	if annotation.ActionClick != nil {
+		paintLineAnnotationAction(p, r.X+ed.annotationW-lineAnnotationActionWidth+6, y+ed.view.lineHeight/2, color, ed.theme.Background)
+	}
+}
+
+func (ed *editor) paintLineAnnotationAvatar(p *ui.Painter, rect ui.Rect, avatar *LineAnnotationAvatar) {
+	bitmap := (*ui.Bitmap)(nil)
+	if avatar.Bitmap != nil {
+		bitmap = avatar.Bitmap()
+	}
+	if bitmap != nil {
+		p.Clip(rect, rect.W/2, func() { p.Image(bitmap, rect, ui.Cover) })
+		return
+	}
+	background := avatar.Background
+	if background == (ui.Color{}) {
+		background = ed.theme.LineNumber
+	}
+	p.Fill(rect, background, rect.W/2)
+	if avatar.Initial == "" {
+		return
+	}
+	style := ed.view.style
+	style.Size = max(float32(8), rect.H*0.58)
+	layout := ed.view.shaped.get(avatar.Initial, style)
+	if len(layout.Lines) == 0 {
+		return
+	}
+	line := layout.Lines[0]
+	baseline := rect.Y + (rect.H-(line.Ascent+line.Descent))/2 + line.Ascent
+	p.TextLine(layout, rect.X+(rect.W-layout.Width)/2, baseline, func(int) ui.Color {
+		return ui.RGB(255, 255, 255)
+	})
+}
+
+// paintLineAnnotationAction draws two overlapping pages without depending on
+// an icon font, so every theme and platform gets the same recognizable action.
+func paintLineAnnotationAction(p *ui.Painter, x, y float32, color, background ui.Color) {
+	back := ui.Path{}
+	back.MoveTo(x+1, y-6).LineTo(x+9, y-6).LineTo(x+9, y+3).LineTo(x+3, y+3).LineTo(x+3, y+5).LineTo(x+1, y+5).Close()
+	p.StrokePath(&back, 1.1, color)
+	frontRect := ui.Rect{X: x + 5, Y: y - 3, W: 9, H: 10}
+	p.Fill(frontRect, background, 0)
+	front := ui.Path{}
+	front.MoveTo(x+5, y-3).LineTo(x+14, y-3).LineTo(x+14, y+7).LineTo(x+5, y+7).Close()
+	p.StrokePath(&front, 1.1, color)
 }
 
 // paintLineAnnotations draws only rows in view. The column never horizontally

@@ -39,6 +39,55 @@ func TestLineAnnotationsShareGutterAndClickWithoutMovingCaret(t *testing.T) {
 	}
 }
 
+func TestLineAnnotationActionUsesSeparateClickArea(t *testing.T) {
+	ct := newEditorTest(t, "", "|first\nsecond\nthird\n")
+	ct.st.LineAnnotationWidth = 240
+	summaryClicks, actionClicks := 0, 0
+	ct.st.SetLineAnnotations([]LineAnnotation{{
+		Line: 1, Text: "Ada • second change", Detail: "yesterday",
+		Click:       func() { summaryClicks++ },
+		ActionClick: func() { actionClicks++ },
+	}})
+	ct.tt.Frame()
+	ed := &ct.st.ed
+	y := ed.view.lineHeight * 1.5
+	ct.tt.Press(ed.annotationW-lineAnnotationActionWidth/2, y)
+	ct.tt.Release(ed.annotationW-lineAnnotationActionWidth/2, y)
+	if actionClicks != 1 || summaryClicks != 0 {
+		t.Fatalf("action clicks = %d, summary clicks = %d", actionClicks, summaryClicks)
+	}
+	x := ed.annotationW - lineAnnotationActionWidth - 10
+	ct.tt.Press(x, y)
+	ct.tt.Release(x, y)
+	if summaryClicks != 1 || actionClicks != 1 {
+		t.Fatalf("summary clicks = %d, action clicks = %d", summaryClicks, actionClicks)
+	}
+	if got := ct.st.CursorPos(); got.Line != 0 || got.Col != 0 {
+		t.Fatalf("annotation clicks moved the caret to %+v", got)
+	}
+}
+
+func TestLineAnnotationAvatarPaintsGeneratedFallback(t *testing.T) {
+	ct := newEditorTest(t, "", "|first\n")
+	ct.st.LineAnnotationWidth = 240
+	lookups := 0
+	ct.st.SetLineAnnotations([]LineAnnotation{{
+		Line: 0, Text: "Ada • first change",
+		Avatar: &LineAnnotationAvatar{
+			Initial: "A", Background: ui.RGB(255, 0, 0),
+			Bitmap: func() *ui.Bitmap { lookups++; return nil },
+		},
+	}})
+	ct.tt.Frame()
+	if lookups == 0 {
+		t.Fatal("the avatar cache was not consulted")
+	}
+	r, g, b := ct.pixel(11, ct.st.ed.view.lineHeight/2)
+	if r < 200 || g > 80 || b > 80 {
+		t.Fatalf("avatar fallback pixel = %d,%d,%d, want the author's red circle", r, g, b)
+	}
+}
+
 func TestLineAnnotationHoverRequestsItsSourceLineEnd(t *testing.T) {
 	ct := newEditorTest(t, "", "first\nsecond\nthird\n")
 	ct.st.LineAnnotationWidth = 260

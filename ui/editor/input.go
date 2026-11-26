@@ -664,6 +664,10 @@ func (ed *editor) gutterPress(ev ui.InputEvent) bool {
 			return true
 		}
 	}
+	if annotation := ed.lineAnnotationActionAt(ev.X, ev.Y); annotation != nil {
+		annotation.ActionClick()
+		return true
+	}
 	if annotation := ed.lineAnnotationAt(ev.X, ev.Y); annotation != nil && annotation.Click != nil {
 		annotation.Click()
 		return true
