@@ -151,6 +151,56 @@ func TestLineAnnotationsClearWhenTextChanges(t *testing.T) {
 	}
 }
 
+func TestLineAnnotationResizeAndRangeBorder(t *testing.T) {
+	ct := newEditorTest(t, "", "|first\nsecond\nthird\nfourth\n")
+	ct.st.LineAnnotationWidth = 240
+	ct.st.SetLineAnnotations([]LineAnnotation{{
+		Line: 0, LastLine: 2, Text: "Ada • a range", Border: ui.RGB(255, 0, 0),
+	}})
+	resized := float32(0)
+	ct.st.OnLineAnnotationResize = func(width float32) {
+		resized = width
+		ct.st.LineAnnotationWidth = width
+	}
+	ct.tt.Frame()
+	ed := &ct.st.ed
+	if annotation := ed.lineAnnotationRange(1); annotation == nil || annotation.Line != 0 || annotation.LastLine != 2 {
+		t.Fatalf("continuation has no range decoration: %#v", annotation)
+	}
+	if ed.lineAnnotationFor(1) != nil || ed.lineAnnotationRange(3) != nil {
+		t.Fatal("a range duplicated its summary or overran its last line")
+	}
+	r, g, b := ct.pixel(2, ed.view.lineHeight*1.5)
+	if r < 200 || g > 80 || b > 80 {
+		t.Fatalf("continuation border pixel = %d,%d,%d, want red", r, g, b)
+	}
+	if !ed.lineAnnotationResizeAt(ed.annotationW+3) || ed.lineAnnotationResizeAt(ed.annotationW+4) {
+		t.Fatal("the separator hit area is not three DIPs on each side")
+	}
+	ct.tt.Move(ed.annotationW, 8)
+	if got := ct.tt.Cursor(); got != ui.CursorResizeEW {
+		t.Fatalf("separator cursor = %v, want horizontal resize", got)
+	}
+	startX := ed.annotationW
+	targetX := startX + 30
+	ct.tt.Press(startX, 8)
+	ct.tt.Move(targetX, 8)
+	ct.tt.Release(targetX, 8)
+	if resized != 270 || ct.st.LineAnnotationWidth != 270 {
+		t.Fatalf("resized width = %v state = %v, want 270", resized, ct.st.LineAnnotationWidth)
+	}
+	ct.tt.Frame()
+	if ed.annotationW != 270 {
+		t.Fatalf("laid-out annotation width = %v, want 270", ed.annotationW)
+	}
+	ct.tt.Press(ed.annotationW, 8)
+	ct.tt.Move(ed.annotationW-200, 8)
+	ct.tt.Release(ed.annotationW-200, 8)
+	if resized != 160 {
+		t.Fatalf("left drag width = %v, want the 160 DIP minimum", resized)
+	}
+}
+
 func TestLineAnnotationWidthLeavesSourceRoom(t *testing.T) {
 	st := &State{Buffer: NewBuffer("first\nsecond\n"), LineAnnotationWidth: 500}
 	st.SetLineAnnotations([]LineAnnotation{{Line: 0, Text: "A change"}})

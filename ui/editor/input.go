@@ -76,6 +76,10 @@ func (ed *editor) dispatch(ev ui.InputEvent) bool {
 	case ui.InputPointerMove:
 		return ed.pointerMove(ev)
 	case ui.InputPointerUp:
+		if ed.annotationResize.active {
+			ed.annotationResize.active = false
+			return true
+		}
 		if ed.gesture.active && ed.gesture.mode == 4 {
 			ed.dropDragged(ev)
 			ed.endGroup()
@@ -155,6 +159,7 @@ const (
 	regionGutter
 	regionVScroll
 	regionHScroll
+	regionAnnotationResize
 )
 
 func (ed *editor) regionAt(x, y float32) region {
@@ -164,6 +169,9 @@ func (ed *editor) regionAt(x, y float32) region {
 	}
 	if horizontal && y >= ed.hbarY && y < ed.hbarY+ed.barWidth() {
 		return regionHScroll
+	}
+	if ed.lineAnnotationResizeAt(x) {
+		return regionAnnotationResize
 	}
 	if x < ed.gutterW {
 		return regionGutter
@@ -191,7 +199,7 @@ func (ed *editor) pointerDown(ev ui.InputEvent) bool {
 	}
 	// A press on the scope headers pinned to the top of the text goes to
 	// their line, as VS Code's sticky scroll.
-	if ed.region != regionVScroll && ed.region != regionHScroll {
+	if ed.region != regionVScroll && ed.region != regionHScroll && ed.region != regionAnnotationResize {
 		if line, ok := ed.stickyHeaderAt(ev.Y); ok {
 			ed.setScroll(ed.rowTop(line))
 			return true
@@ -202,6 +210,9 @@ func (ed *editor) pointerDown(ev ui.InputEvent) bool {
 		return ed.scrollbarPress(ev, false)
 	case regionHScroll:
 		return ed.scrollbarPress(ev, true)
+	case regionAnnotationResize:
+		ed.annotationResize = lineAnnotationResize{active: true, startX: ev.X, startWidth: ed.annotationW}
+		return true
 	case regionGutter:
 		return ed.gutterPress(ev)
 	}
@@ -436,6 +447,10 @@ func (ed *editor) columnSelect(x float32, y float64) {
 
 func (ed *editor) pointerMove(ev ui.InputEvent) bool {
 	ed.pointer, ed.pointerIn = ui.Point{X: ev.X, Y: ev.Y}, ev.X >= 0 && ev.Y >= 0 && ev.X < ed.r.W && ev.Y < ed.viewH
+	if ed.annotationResize.active {
+		ed.dragLineAnnotation(ev.X)
+		return true
+	}
 	if ed.scrollbar.active {
 		ed.dragScrollbar(ev)
 		return true

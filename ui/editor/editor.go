@@ -65,6 +65,8 @@ type options struct {
 	contextMenu         func(m *ui.Menu)
 	onInput             func(ui.InputEvent) bool
 	noInputMethod       bool
+
+	onLineAnnotationResize func(float32)
 	// The parts' render functions, nil for the editor's own.
 	renderFindBar     func(*ui.Context, ui.Element, *FindBar)
 	renderGoToLine    func(*ui.Context, ui.Element, *GoToLineBar)
@@ -247,8 +249,12 @@ type editor struct {
 	// link is the word under the pointer that Cmd+click would go to the
 	// definition of, which shows as a link while Cmd is held; none when
 	// its ends are equal.
-	link       [2]int
-	scrollbar  scrollbarDrag
+	link      [2]int
+	scrollbar scrollbarDrag
+
+	// annotationResize is a drag on the line annotation column's separator.
+	annotationResize lineAnnotationResize
+
 	frameNow   time.Time
 	needsBuild bool
 	// stale tells that an edit found the buffer edited since the editor

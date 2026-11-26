@@ -23,9 +23,20 @@ type LineAnnotation struct {
 	Detail string
 	Click  func()
 	Avatar *LineAnnotationAvatar
-	// ActionClick shows a two-page action at the column's trailing edge, as
-	// "view blame prior to this change". Its hit area is separate from Click.
+	// LastLine is the inclusive end of this annotation's range. Border runs
+	// continuously at the range's left edge while its summary stays on Line.
+	LastLine int
+	Border   ui.Color
+	// ActionClick shows a stacked-file history action at the column's trailing
+	// edge, as "view blame prior to this change". Its hit area is separate.
 	ActionClick func()
+}
+
+// lineAnnotationResize keeps pointer geometry out of the app model. The new
+// width is published through State.OnLineAnnotationResize.
+type lineAnnotationResize struct {
+	active             bool
+	startX, startWidth float32
 }
 
 // LineAnnotationAvatar is a small author image at the start of an annotation.
@@ -51,6 +62,10 @@ func (st *State) SetLineAnnotations(annotations []LineAnnotation) {
 		}
 		annotation.Text = singleLineAnnotation(annotation.Text)
 		annotation.Detail = singleLineAnnotation(annotation.Detail)
+		if annotation.LastLine < annotation.Line {
+			annotation.LastLine = annotation.Line
+		}
+		annotation.LastLine = min(annotation.LastLine, st.ed.view.text.LineCount()-1)
 		next = append(next, annotation)
 	}
 	slices.SortStableFunc(next, func(a, b LineAnnotation) int { return a.Line - b.Line })
@@ -95,6 +110,18 @@ func (ed *editor) lineAnnotationFor(line int) *LineAnnotation {
 	return &ed.lineAnnotations[index]
 }
 
+// lineAnnotationRange returns the range that decorates line, without putting
+// its summary, avatar or actions on continuation lines.
+func (ed *editor) lineAnnotationRange(line int) *LineAnnotation {
+	index := sort.Search(len(ed.lineAnnotations), func(i int) bool {
+		return ed.lineAnnotations[i].Line > line
+	}) - 1
+	if index < 0 || line > ed.lineAnnotations[index].LastLine {
+		return nil
+	}
+	return &ed.lineAnnotations[index]
+}
+
 // lineAnnotationAt returns the annotation in the extra gutter column at x, y.
 func (ed *editor) lineAnnotationAt(x, y float32) *LineAnnotation {
 	if ed.annotationW <= 0 || x < 0 || x >= ed.annotationW {
@@ -120,6 +147,28 @@ func (ed *editor) lineAnnotationActionAt(x, y float32) *LineAnnotation {
 		return nil
 	}
 	return annotation
+}
+
+// lineAnnotationResizeAt reports whether x is in the trailing separator's
+// six-DIP hit area. Three DIPs on either side make the one-DIP line easy to drag.
+func (ed *editor) lineAnnotationResizeAt(x float32) bool {
+	return len(ed.lineAnnotations) > 0 && ed.annotationW > 0 &&
+		x >= ed.annotationW-3 && x <= ed.annotationW+3
+}
+
+func (ed *editor) dragLineAnnotation(x float32) {
+	drag := ed.annotationResize
+	if !drag.active {
+		return
+	}
+	available := max(float32(1), ed.laidW*0.55-(ed.gutterW-ed.annotationW))
+	minimum := min(float32(160), available)
+	width := min(available, max(minimum, drag.startWidth+x-drag.startX))
+	ed.annotationW = width
+	ed.o.lineAnnotationWidth = width
+	if ed.o.onLineAnnotationResize != nil {
+		ed.o.onLineAnnotationResize(width)
+	}
 }
 
 // fitLineAnnotationText shortens text to width without changing the app's
@@ -247,17 +296,28 @@ func (ed *editor) paintLineAnnotationAvatar(p *ui.Painter, rect ui.Rect, avatar 
 	})
 }
 
-// paintLineAnnotationAction draws two overlapping pages without depending on
-// an icon font, so every theme and platform gets the same recognizable action.
+// paintLineAnnotationAction draws three stacked documents with a folded
+// corner on the front page: GitLab's history affordance, not a copy action.
 func paintLineAnnotationAction(p *ui.Painter, x, y float32, color, background ui.Color) {
-	back := ui.Path{}
-	back.MoveTo(x+1, y-6).LineTo(x+9, y-6).LineTo(x+9, y+3).LineTo(x+3, y+3).LineTo(x+3, y+5).LineTo(x+1, y+5).Close()
-	p.StrokePath(&back, 1.1, color)
-	frontRect := ui.Rect{X: x + 5, Y: y - 3, W: 9, H: 10}
-	p.Fill(frontRect, background, 0)
+	document := func(x, y, w, h float32) {
+		rect := ui.Rect{X: x, Y: y, W: w, H: h}
+		p.Fill(rect, background, 0)
+		path := ui.Path{}
+		path.MoveTo(x, y).LineTo(x+w, y).LineTo(x+w, y+h).LineTo(x, y+h).Close()
+		p.StrokePath(&path, 1, color)
+	}
+	document(x, y-4, 6, 10)
+	document(x+3, y-5, 6, 11)
+
+	left, top, right, bottom, fold := x+6, y-7, x+16, y+7, float32(3)
 	front := ui.Path{}
-	front.MoveTo(x+5, y-3).LineTo(x+14, y-3).LineTo(x+14, y+7).LineTo(x+5, y+7).Close()
+	front.MoveTo(left, top).LineTo(right-fold, top).LineTo(right, top+fold).
+		LineTo(right, bottom).LineTo(left, bottom).Close()
+	p.FillPath(&front, background)
 	p.StrokePath(&front, 1.1, color)
+	crease := ui.Path{}
+	crease.MoveTo(right-fold, top).LineTo(right-fold, top+fold).LineTo(right, top+fold)
+	p.StrokePath(&crease, 1.1, color)
 }
 
 // paintLineAnnotations draws only rows in view. The column never horizontally
@@ -277,6 +337,9 @@ func (ed *editor) paintLineAnnotations(p *ui.Painter, r ui.Rect, f *frame) {
 			}
 			y := r.Y + float32(geometry.rows-ed.scrollY) + ed.sticky
 			height := float32(geometry.below - geometry.rows)
+			if annotation := ed.lineAnnotationRange(line); annotation != nil && annotation.Border.A > 0 {
+				p.Fill(ui.Rect{X: r.X + 1, Y: y, W: 3, H: height}, annotation.Border, 0)
+			}
 			active := ed.hoverLine == line || f.activeLines[line]
 			ed.paintLineAnnotation(p, r, line, y, height, active)
 		}
