@@ -89,6 +89,8 @@ func (ed *editor) build(c *ui.Context, buf *Buffer, o options) ui.Element {
 	// shows the link or takes it away.
 	ed.link = ed.linkAt(c.Modifiers())
 	switch {
+	case ed.lineAnnotationAt(ed.pointer.X, ed.pointer.Y) != nil:
+		e.Cursor(ui.CursorPointer)
 	case ed.link[1] > ed.link[0]:
 		e.Cursor(ui.CursorPointer)
 	case ed.region == regionText:

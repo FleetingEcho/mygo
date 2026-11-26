@@ -23,46 +23,48 @@ const (
 type options struct {
 	// diffSide is the side of a diff viewer the editor shows, which
 	// names it.
-	diffSide        int8
-	readOnly        bool
-	font            ui.Font
-	lineHeight      float32
-	tabSize         int
-	indent          IndentStyle
-	wrap            bool
-	wrapColumn      int
-	lineNumbers     LineNumbers
-	whitespace      Whitespace
-	wrapGuides      []int
-	indentGuides    bool
-	scrollPastEnd   bool
-	scrollMargin    int
-	autoClose       bool
-	folding         bool
-	activeLine      bool
-	cursorShape     CursorShape
-	fitContent      bool
-	placeholder     string
-	label           string
-	theme           *Theme
-	bindings        []Binding
-	snippets        map[string]*Snippet
-	symbols         []Symbol
-	gutterMarks     []GutterMark
-	backgrounds     []LineBackground
-	textBgs         []TextBackground
-	semantic        []SemanticToken
-	diffBase        *Buffer
-	onCompletion    func(CompletionRequest)
-	onHover         func(HoverRequest)
-	onSignatureHelp func(SignatureHelpRequest)
-	onCodeActions   func(CodeActionRequest)
-	onRename        func(RenameRequest)
-	onDefinition    func(int)
-	onGutterClick   func(int)
-	contextMenu     func(m *ui.Menu)
-	onInput         func(ui.InputEvent) bool
-	noInputMethod   bool
+	diffSide            int8
+	readOnly            bool
+	font                ui.Font
+	lineHeight          float32
+	tabSize             int
+	indent              IndentStyle
+	wrap                bool
+	wrapColumn          int
+	lineNumbers         LineNumbers
+	whitespace          Whitespace
+	wrapGuides          []int
+	indentGuides        bool
+	scrollPastEnd       bool
+	scrollMargin        int
+	autoClose           bool
+	folding             bool
+	activeLine          bool
+	cursorShape         CursorShape
+	fitContent          bool
+	placeholder         string
+	label               string
+	theme               *Theme
+	bindings            []Binding
+	snippets            map[string]*Snippet
+	symbols             []Symbol
+	gutterMarks         []GutterMark
+	backgrounds         []LineBackground
+	textBgs             []TextBackground
+	semantic            []SemanticToken
+	lineAnnotations     []LineAnnotation
+	lineAnnotationWidth float32
+	diffBase            *Buffer
+	onCompletion        func(CompletionRequest)
+	onHover             func(HoverRequest)
+	onSignatureHelp     func(SignatureHelpRequest)
+	onCodeActions       func(CodeActionRequest)
+	onRename            func(RenameRequest)
+	onDefinition        func(int)
+	onGutterClick       func(int)
+	contextMenu         func(m *ui.Menu)
+	onInput             func(ui.InputEvent) bool
+	noInputMethod       bool
 	// The parts' render functions, nil for the editor's own.
 	renderFindBar     func(*ui.Context, ui.Element, *FindBar)
 	renderGoToLine    func(*ui.Context, ui.Element, *GoToLineBar)
@@ -201,8 +203,12 @@ type editor struct {
 	// as high as its content lays out at again as it builds: the element's,
 	// or the half of a split diff's its row's Draw gives it while the
 	// element itself, out of view, does not paint.
-	laidW   float32
-	gutterW float32
+	laidW       float32
+	gutterW     float32
+	annotationW float32
+	// lineAnnotations are the app's annotations in the gutter's left column.
+	// They are cleared by buffer edits rather than attached to stale text.
+	lineAnnotations []LineAnnotation
 	// sticky is how much the scope headers pinned to the top of the text
 	// take of it, which its rows move down by (stickyHeight).
 	sticky float32
@@ -398,6 +404,7 @@ func (ed *editor) sync() {
 	f := &ed.find
 	searched := !f.stale && f.version == ed.view.version
 	ed.view.sync(func(cs []change) {
+		ed.lineAnnotations, ed.o.lineAnnotations = nil, nil
 		if ed.snippet != nil && !ed.snippet.moved(cs) {
 			ed.snippet = nil
 		}
@@ -484,6 +491,7 @@ func (ed *editor) resetForBuffer() {
 	ed.selUndo, ed.selRedo = nil, nil
 	ed.folds, ed.autoclosed, ed.marked, ed.diags = nil, nil, nil, nil
 	ed.view.inlays, ed.suggestion = nil, ""
+	ed.lineAnnotations = nil
 	ed.view.repls, ed.view.replCross = nil, nil
 	ed.view.lineStyles, ed.view.stylesDirty = nil, true
 	ed.view.replsChanged()
@@ -892,7 +900,7 @@ func (ed *editor) numbersOn() bool {
 	return (ed.o.lineNumbers != LineNumbersOff) != ed.toggledNumbers
 }
 
-func (ed *editor) gutterWidth() float32 {
+func (ed *editor) gutterWidth(width float32) float32 {
 	v := &ed.view
 	w := float32(0)
 	if ed.numbersOn() {
@@ -915,7 +923,15 @@ func (ed *editor) gutterWidth() float32 {
 		// Room for the change bars at the gutter's left edge.
 		w += 6
 	}
-	return float32(math.Ceil(float64(w)))
+	ed.annotationW = 0
+	if len(ed.o.lineAnnotations) > 0 && ed.o.lineAnnotationWidth > 0 {
+		// Keep at least 45% of the editor for source text. The application can
+		// choose a comfortable column on wide editors without making a split
+		// pane or a small window unusable.
+		available := max(float32(0), width*0.55-w)
+		ed.annotationW = min(ed.o.lineAnnotationWidth, available)
+	}
+	return float32(math.Ceil(float64(w + ed.annotationW)))
 }
 
 // visibleLines returns the lines that show in the frame's view, through

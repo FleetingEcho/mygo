@@ -152,6 +152,10 @@ type State struct {
 	// GutterMarks marks lines in the gutter, as breakpoints or
 	// bookmarks: a dot of their color.
 	GutterMarks []GutterMark
+	// LineAnnotationWidth reserves room for SetLineAnnotations to the left
+	// of the line numbers. Zero hides the annotation column; on a narrow
+	// editor the column is capped so the source text retains room.
+	LineAnnotationWidth float32
 	// LineBackgrounds fill the rows of lines with colors, under the
 	// text and the selections, as the statement a key runs: not the
 	// gutter, nor the lines folds hide. They keep their line numbers as
@@ -304,6 +308,7 @@ func (st *State) options() options {
 		autoClose: !st.NoAutoClose, folding: !st.NoFolding, activeLine: !st.NoActiveLine, cursorShape: st.CursorShape, fitContent: st.FitContent,
 		placeholder: st.Placeholder, label: st.Label, theme: st.Theme, bindings: st.Bindings, snippets: st.Snippets, gutterMarks: st.GutterMarks,
 		backgrounds: st.LineBackgrounds, textBgs: st.TextBackgrounds, semantic: st.SemanticTokens, symbols: st.Symbols, diffBase: st.DiffBase, onCompletion: st.OnCompletion, onHover: st.OnHover, onSignatureHelp: st.OnSignatureHelp, onCodeActions: st.OnCodeActions, onRename: st.OnRename, onDefinition: st.OnDefinition,
+		lineAnnotations: st.ed.lineAnnotations, lineAnnotationWidth: st.LineAnnotationWidth,
 		hoverDelay: st.HoverDelay, noPointerHover: st.NoPointerHover,
 		noDefinitionClick: st.NoDefinitionClick, noDefinitionLink: st.NoDefinitionLink,
 		onGutterClick: st.OnGutterClick, contextMenu: st.ContextMenu, onInput: st.OnInput, noInputMethod: st.NoInputMethod, minDigits: 3,

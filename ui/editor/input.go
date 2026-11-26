@@ -474,7 +474,12 @@ func (ed *editor) pointerMove(ev ui.InputEvent) bool {
 		changed = true
 	}
 	h := &ed.hover
-	off := ed.textAt(ev.X, ev.Y)
+	off := -1
+	if annotation := ed.lineAnnotationAt(ev.X, ev.Y); annotation != nil {
+		off = ed.view.text.LineEnd(annotation.Line)
+	} else {
+		off = ed.textAt(ev.X, ev.Y)
+	}
 	// Trailing inlays are the exception: their caret deliberately stays
 	// before them, but their rendered text is still a hover target. Not a
 	// link's, which would underline the line's last word.
@@ -658,6 +663,10 @@ func (ed *editor) gutterPress(ev ui.InputEvent) bool {
 		if ed.o.decor.blockInput(ed, nil, ev, ui.Rect{Y: float32(g.rows - ed.scrollY), H: ed.view.lineHeight, W: ed.gutterW}) {
 			return true
 		}
+	}
+	if annotation := ed.lineAnnotationAt(ev.X, ev.Y); annotation != nil && annotation.Click != nil {
+		annotation.Click()
+		return true
 	}
 	if ed.o.folding && ed.o.decor == nil && ev.X >= ed.foldX() {
 		if ed.foldable(line) || ed.isFolded(line) {

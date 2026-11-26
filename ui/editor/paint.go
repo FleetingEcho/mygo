@@ -41,7 +41,7 @@ type frame struct {
 func (ed *editor) layout(w, h, scale float32) {
 	v := &ed.view
 	v.setStyle(ed.o.font, ed.o.lineHeight, scale, ed.tabSize())
-	ed.gutterW = ed.gutterWidth()
+	ed.gutterW = ed.gutterWidth(w)
 	pad := float32(4)
 	if ed.gutterW == 0 {
 		pad = 8
@@ -823,6 +823,7 @@ func (ed *editor) paintSticky(p *ui.Painter, r ui.Rect) {
 			var cc runColors
 			v.colorsOf(l, &cc)
 			v.paintRow(p, l, &l.rows[0], ox, y, &cc, nil)
+			ed.paintLineAnnotation(p, r, line, y, v.rowHeight(line), line == cur)
 			ed.paintStickyNumber(p, r, line, y, line == cur)
 		}
 	})
@@ -863,6 +864,7 @@ func (ed *editor) paintGutter(p *ui.Painter, r ui.Rect, f *frame) {
 	if ed.gutterW <= 0 {
 		return
 	}
+	ed.paintLineAnnotations(p, r, f)
 	v := &ed.view
 	ct := ed.theme
 	h := &v.heights
@@ -927,7 +929,7 @@ func (ed *editor) paintGutter(p *ui.Painter, r ui.Rect, f *frame) {
 			for _, m := range ed.o.gutterMarks {
 				if m.Line == line {
 					d := lh * 0.45
-					p.Fill(ui.Rect{X: r.X + 3, Y: ny + (lh-d)/2, W: d, H: d}, m.Color, d/2)
+					p.Fill(ui.Rect{X: r.X + ed.annotationW + 3, Y: ny + (lh-d)/2, W: d, H: d}, m.Color, d/2)
 				}
 			}
 			// Change bars.
