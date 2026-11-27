@@ -118,7 +118,7 @@ func TestLineAnnotationAvatarPaintsGeneratedFallback(t *testing.T) {
 	}
 }
 
-func TestLineAnnotationHoverRequestsItsSourceLineEnd(t *testing.T) {
+func TestLineAnnotationHoverOpensNothing(t *testing.T) {
 	ct := newEditorTest(t, "", "first\nsecond\nthird\n")
 	ct.st.LineAnnotationWidth = 260
 	ct.st.HoverDelay = 100 * time.Millisecond
@@ -128,19 +128,38 @@ func TestLineAnnotationHoverRequestsItsSourceLineEnd(t *testing.T) {
 	ct.tt.Frame()
 	ed := &ct.st.ed
 
+	// The column is not a hover target: details open only from its button.
 	ct.tt.Move(ed.annotationW/2, ed.view.lineHeight*1.5)
 	ct.tt.Advance(200 * time.Millisecond)
 	ct.tt.Frame()
-	want := ed.view.text.LineEnd(1)
-	if len(requests) != 1 || requests[0].Offset != want || requests[0].Version != ed.view.version {
-		t.Fatalf("annotation hover = %#v, want offset %d at version %d", requests, want, ed.view.version)
+	if len(requests) != 0 {
+		t.Fatalf("resting on an annotation requested hover: %#v", requests)
 	}
+}
 
-	ct.tt.Move(ed.annotationW/2, ed.view.lineHeight*2.5)
-	ct.tt.Advance(200 * time.Millisecond)
+func TestLineAnnotationDetailsButtonSitsBesideHistory(t *testing.T) {
+	ct := newEditorTest(t, "", "|first\nsecond\nthird\n")
+	ct.st.LineAnnotationWidth = 300
+	summary, history, details := 0, 0, 0
+	ct.st.SetLineAnnotations([]LineAnnotation{{
+		Line: 1, Text: "Ada • second change", Detail: "yesterday",
+		Click:        func() { summary++ },
+		ActionClick:  func() { history++ },
+		DetailsClick: func() { details++ },
+	}})
 	ct.tt.Frame()
-	if len(requests) != 1 {
-		t.Fatalf("a line without an annotation requested hover: %#v", requests)
+	ed := &ct.st.ed
+	y := ed.view.lineHeight * 1.5
+	// History keeps the rightmost slot; details is the one beside it.
+	click := func(slot float32) {
+		x := ed.annotationW - lineAnnotationActionWidth*slot - lineAnnotationActionWidth/2
+		ct.tt.Press(x, y)
+		ct.tt.Release(x, y)
+	}
+	click(0)
+	click(1)
+	if history != 1 || details != 1 || summary != 0 {
+		t.Fatalf("history = %d, details = %d, summary = %d", history, details, summary)
 	}
 }
 

@@ -31,6 +31,29 @@ type LineAnnotation struct {
 	// ActionClick shows a stacked-file history action at the column's trailing
 	// edge, as "view blame prior to this change". Its hit area is separate.
 	ActionClick func()
+	// DetailsClick shows an information button beside the history action, for
+	// the app to open the range's commit details. Hovering the column never
+	// opens anything; details open only from this button.
+	DetailsClick func()
+}
+
+// lineAnnotationActionSlot is one trailing action button.
+type lineAnnotationActionSlot struct {
+	click func()
+	paint func(p *ui.Painter, x, y float32, color, background ui.Color)
+}
+
+// actionSlots lists the trailing buttons from the column's right edge inward:
+// history, then details.
+func (a *LineAnnotation) actionSlots() []lineAnnotationActionSlot {
+	var slots []lineAnnotationActionSlot
+	if a.ActionClick != nil {
+		slots = append(slots, lineAnnotationActionSlot{a.ActionClick, paintLineAnnotationAction})
+	}
+	if a.DetailsClick != nil {
+		slots = append(slots, lineAnnotationActionSlot{a.DetailsClick, paintLineAnnotationDetails})
+	}
+	return slots
 }
 
 // lineAnnotationResize keeps pointer geometry out of the app model. The new
@@ -143,14 +166,19 @@ func (ed *editor) lineAnnotationAt(x, y float32) *LineAnnotation {
 	return ed.lineAnnotationFor(line)
 }
 
-// lineAnnotationActionAt returns the annotation whose trailing action icon
-// contains x, y. The remaining annotation area keeps its ordinary Click.
-func (ed *editor) lineAnnotationActionAt(x, y float32) *LineAnnotation {
+// lineAnnotationActionAt returns the click handler of the trailing action icon
+// that contains x, y. The remaining annotation area keeps its ordinary Click.
+func (ed *editor) lineAnnotationActionAt(x, y float32) func() {
 	annotation := ed.lineAnnotationAt(x, y)
-	if annotation == nil || annotation.ActionClick == nil || x < ed.annotationW-lineAnnotationActionWidth {
+	if annotation == nil {
 		return nil
 	}
-	return annotation
+	slots := annotation.actionSlots()
+	index := int((ed.annotationW - x) / lineAnnotationActionWidth)
+	if x >= ed.annotationW || index < 0 || index >= len(slots) {
+		return nil
+	}
+	return slots[index].click
 }
 
 // lineAnnotationResizeAt reports whether x is in the trailing separator's
@@ -239,9 +267,8 @@ func (ed *editor) paintLineAnnotation(p *ui.Painter, r ui.Rect, line int, y, hei
 	const dateGap = float32(12)
 	x := r.X + horizontalPadding
 	width := ed.annotationW - horizontalPadding*2
-	if annotation.ActionClick != nil {
-		width -= lineAnnotationActionWidth
-	}
+	slots := annotation.actionSlots()
+	width -= lineAnnotationActionWidth * float32(len(slots))
 	date := ""
 	if annotation.Date != "" {
 		dateWidth := ed.view.lineAnnotationDateWidth()
@@ -283,9 +310,24 @@ func (ed *editor) paintLineAnnotation(p *ui.Painter, r ui.Rect, line int, y, hei
 	if detail != "" {
 		ed.view.paintLineAnnotationText(p, detail, x+width-detailWidth, y, color)
 	}
-	if annotation.ActionClick != nil {
-		paintLineAnnotationAction(p, r.X+ed.annotationW-lineAnnotationActionWidth+6, y+ed.view.lineHeight/2, color, ed.theme.Background)
+	for index, slot := range slots {
+		x := r.X + ed.annotationW - lineAnnotationActionWidth*float32(index+1) + 6
+		slot.paint(p, x, y+ed.view.lineHeight/2, color, ed.theme.Background)
 	}
+}
+
+// paintLineAnnotationDetails draws a circled "i": the commit's details.
+func paintLineAnnotationDetails(p *ui.Painter, x, y float32, color, _ ui.Color) {
+	cx := x + 8
+	ring := ui.Path{}
+	ring.Circle(cx, y, 7)
+	p.StrokePath(&ring, 1.1, color)
+	dot := ui.Path{}
+	dot.Circle(cx, y-3, 0.9)
+	p.FillPath(&dot, color)
+	stem := ui.Path{}
+	stem.MoveTo(cx, y-0.8).LineTo(cx, y+3.6)
+	p.StrokePath(&stem, 1.2, color)
 }
 
 func (ed *editor) paintLineAnnotationAvatar(p *ui.Painter, rect ui.Rect, avatar *LineAnnotationAvatar) {

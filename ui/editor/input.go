@@ -491,7 +491,9 @@ func (ed *editor) pointerMove(ev ui.InputEvent) bool {
 	h := &ed.hover
 	off := -1
 	if annotation := ed.lineAnnotationAt(ev.X, ev.Y); annotation != nil {
-		off = ed.view.text.LineEnd(annotation.Line)
+		// The annotation column is never a hover target: its details open from
+		// the button, so resting the pointer on it opens nothing.
+		off = -1
 	} else {
 		off = ed.textAt(ev.X, ev.Y)
 	}
@@ -679,8 +681,8 @@ func (ed *editor) gutterPress(ev ui.InputEvent) bool {
 			return true
 		}
 	}
-	if annotation := ed.lineAnnotationActionAt(ev.X, ev.Y); annotation != nil {
-		annotation.ActionClick()
+	if click := ed.lineAnnotationActionAt(ev.X, ev.Y); click != nil {
+		click()
 		return true
 	}
 	if annotation := ed.lineAnnotationAt(ev.X, ev.Y); annotation != nil && annotation.Click != nil {
