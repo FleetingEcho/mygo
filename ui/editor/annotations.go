@@ -316,20 +316,6 @@ func (ed *editor) paintLineAnnotation(p *ui.Painter, r ui.Rect, line int, y, hei
 	}
 }
 
-// paintLineAnnotationDetails draws a circled "i": the commit's details.
-func paintLineAnnotationDetails(p *ui.Painter, x, y float32, color, _ ui.Color) {
-	cx := x + 8
-	ring := ui.Path{}
-	ring.Circle(cx, y, 7)
-	p.StrokePath(&ring, 1.1, color)
-	dot := ui.Path{}
-	dot.Circle(cx, y-3, 0.9)
-	p.FillPath(&dot, color)
-	stem := ui.Path{}
-	stem.MoveTo(cx, y-0.8).LineTo(cx, y+3.6)
-	p.StrokePath(&stem, 1.2, color)
-}
-
 func (ed *editor) paintLineAnnotationAvatar(p *ui.Painter, rect ui.Rect, avatar *LineAnnotationAvatar) {
 	bitmap := (*ui.Bitmap)(nil)
 	if avatar.Bitmap != nil {
@@ -360,28 +346,53 @@ func (ed *editor) paintLineAnnotationAvatar(p *ui.Painter, rect ui.Rect, avatar 
 	})
 }
 
+// lineAnnotationGlyphScale shrinks the trailing glyphs below their 16-DIP slot
+// so they sit quietly beside the text instead of competing with it.
+const lineAnnotationGlyphScale = float32(0.72)
+
+// paintLineAnnotationDetails draws a circled "i": the commit's details.
+func paintLineAnnotationDetails(p *ui.Painter, x, y float32, color, _ ui.Color) {
+	const k = lineAnnotationGlyphScale
+	cx := x + 8
+	ring := ui.Path{}
+	ring.Circle(cx, y, 7*k)
+	p.StrokePath(&ring, 1, color)
+	dot := ui.Path{}
+	dot.Circle(cx, y-3*k, 0.8)
+	p.FillPath(&dot, color)
+	stem := ui.Path{}
+	stem.MoveTo(cx, y-0.9*k).LineTo(cx, y+3.6*k)
+	p.StrokePath(&stem, 1, color)
+}
+
 // paintLineAnnotationAction draws three stacked documents with a folded
 // corner on the front page: GitLab's history affordance, not a copy action.
 func paintLineAnnotationAction(p *ui.Painter, x, y float32, color, background ui.Color) {
-	document := func(x, y, w, h float32) {
-		rect := ui.Rect{X: x, Y: y, W: w, H: h}
+	const k = lineAnnotationGlyphScale
+	// Offsets are authored on the 16-DIP grid and scaled about its center.
+	at := func(ox, oy float32) (float32, float32) { return x + 8 + (ox-8)*k, y + oy*k }
+	document := func(ox, oy, w, h float32) {
+		left, top := at(ox, oy)
+		rect := ui.Rect{X: left, Y: top, W: w * k, H: h * k}
 		p.Fill(rect, background, 0)
 		path := ui.Path{}
-		path.MoveTo(x, y).LineTo(x+w, y).LineTo(x+w, y+h).LineTo(x, y+h).Close()
+		path.MoveTo(rect.X, rect.Y).LineTo(rect.X+rect.W, rect.Y).LineTo(rect.X+rect.W, rect.Y+rect.H).LineTo(rect.X, rect.Y+rect.H).Close()
 		p.StrokePath(&path, 1, color)
 	}
-	document(x, y-4, 6, 10)
-	document(x+3, y-5, 6, 11)
+	document(0, -4, 6, 10)
+	document(3, -5, 6, 11)
 
-	left, top, right, bottom, fold := x+6, y-7, x+16, y+7, float32(3)
+	left, top := at(6, -7)
+	right, bottom := at(16, 7)
+	fold := 3 * k
 	front := ui.Path{}
 	front.MoveTo(left, top).LineTo(right-fold, top).LineTo(right, top+fold).
 		LineTo(right, bottom).LineTo(left, bottom).Close()
 	p.FillPath(&front, background)
-	p.StrokePath(&front, 1.1, color)
+	p.StrokePath(&front, 1, color)
 	crease := ui.Path{}
 	crease.MoveTo(right-fold, top).LineTo(right-fold, top+fold).LineTo(right, top+fold)
-	p.StrokePath(&crease, 1.1, color)
+	p.StrokePath(&crease, 1, color)
 }
 
 // paintLineAnnotations draws only rows in view. The column never horizontally
