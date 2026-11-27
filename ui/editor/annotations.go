@@ -10,9 +10,9 @@ import (
 
 // LineAnnotation is application text shown in a column to the left of the
 // line numbers, as a source line's commit summary and date. Line is
-// zero-based. Date is laid out first, then Avatar and Text. Detail is kept
-// at the column's right edge while Text is ellipsized to the room left for it.
-// Empty fields reserve no extra space.
+// zero-based. A fixed-width Date comes first, followed by Avatar and Text.
+// Detail is kept at the column's right edge while Text is ellipsized to the
+// room left for it. Empty fields reserve no extra space.
 //
 // SetLineAnnotations clears annotations when the buffer changes. Reapply them
 // once the new text has been attributed; stale annotations never follow edits
@@ -208,6 +208,13 @@ func (v *view) fitLineAnnotationText(text string, width float32) string {
 	return text[:best] + ellipsis
 }
 
+// lineAnnotationDateWidth reserves a stable date column, keeping avatars
+// aligned when one has a one-digit day and another has a two-digit day. The
+// extra space after the comma accommodates differences between month glyphs.
+func (v *view) lineAnnotationDateWidth() float32 {
+	return v.shaped.get("Sep 22, 2000", v.style).Width
+}
+
 func (v *view) paintLineAnnotationText(p *ui.Painter, text string, x, y float32, color ui.Color) {
 	if text == "" {
 		return
@@ -236,12 +243,9 @@ func (ed *editor) paintLineAnnotation(p *ui.Painter, r ui.Rect, line int, y, hei
 		width -= lineAnnotationActionWidth
 	}
 	date := ""
-	dateWidth := float32(0)
 	if annotation.Date != "" {
-		date = ed.view.fitLineAnnotationText(annotation.Date, width*0.45)
-	}
-	if date != "" {
-		dateWidth = ed.view.shaped.get(date, ed.view.style).Width
+		dateWidth := ed.view.lineAnnotationDateWidth()
+		date = ed.view.fitLineAnnotationText(annotation.Date, dateWidth)
 		x += dateWidth + dateGap
 		width -= dateWidth + dateGap
 	}

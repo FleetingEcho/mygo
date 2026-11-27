@@ -39,24 +39,23 @@ func TestLineAnnotationsShareGutterAndClickWithoutMovingCaret(t *testing.T) {
 	}
 }
 
-func TestLineAnnotationLeadingDateAndActionMargin(t *testing.T) {
-	ct := newEditorTest(t, "", "|first\n")
+func TestLineAnnotationDatesAlignAvatars(t *testing.T) {
+	ct := newEditorTest(t, "", "|first\nsecond\nthird\n")
 	ct.st.LineAnnotationWidth = 320
-	ct.st.SetLineAnnotations([]LineAnnotation{{
-		Line: 0, Date: "Mar 5,2020", Text: "Ada • an earlier change",
-		Avatar:      &LineAnnotationAvatar{Background: ui.RGB(0, 0, 255)},
-		ActionClick: func() {},
-	}})
+	avatar := &LineAnnotationAvatar{Background: ui.RGB(0, 0, 255)}
+	ct.st.SetLineAnnotations([]LineAnnotation{
+		{Line: 0, Date: "Aug 1,2025", Avatar: avatar, ActionClick: func() {}},
+		{Line: 1, Date: "Mar 10,2026", Avatar: avatar},
+		{Line: 2, Date: "Sep 22,2000", Avatar: avatar, ActionClick: func() {}},
+	})
 	ct.tt.Frame()
 	ed := &ct.st.ed
-	if got := ct.st.LineAnnotations()[0].Date; got != "Mar 5,2020" {
-		t.Fatalf("annotation date = %q, want one line", got)
-	}
-	dateWidth := ed.view.shaped.get("Mar 5,2020", ed.view.style).Width
-	avatarX := float32(8) + dateWidth + 12
-	r, g, b := ct.pixel(avatarX+2, ed.view.lineHeight/2)
-	if r > 50 || g > 50 || b < 200 {
-		t.Fatalf("avatar after the date is at the wrong position: pixel %d,%d,%d", r, g, b)
+	avatarX := float32(8) + ed.view.lineAnnotationDateWidth() + 12
+	for line := 0; line < 3; line++ {
+		r, g, b := ct.pixel(avatarX+2, (float32(line)+0.5)*ed.view.lineHeight)
+		if r > 50 || g > 50 || b < 200 {
+			t.Fatalf("line %d avatar is not in the common column: pixel %d,%d,%d", line, r, g, b)
+		}
 	}
 }
 
