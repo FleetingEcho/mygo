@@ -428,7 +428,18 @@ func (ed *editor) paintLineAnnotations(p *ui.Painter, r ui.Rect, f *frame) {
 			y := r.Y + float32(geometry.rows-ed.scrollY) + ed.sticky
 			height := float32(geometry.below - geometry.rows)
 			if annotation := ed.lineAnnotationRange(line); annotation != nil && annotation.Border.A > 0 {
-				p.Fill(ui.Rect{X: r.X + 1, Y: y, W: 3, H: height}, annotation.Border, 0)
+				// A pixel is left clear at each end of a range, so two ranges
+				// that touch read as two bars, as GitLab's blame does.
+				top, bottom := y, y+height
+				if line == annotation.Line {
+					top += lineAnnotationBorderGap
+				}
+				if line == annotation.LastLine {
+					bottom -= lineAnnotationBorderGap
+				}
+				if bottom > top {
+					p.Fill(ui.Rect{X: r.X + 1, Y: top, W: 3, H: bottom - top}, annotation.Border, 0)
+				}
 			}
 			active := ed.hoverLine == line || f.activeLines[line]
 			ed.paintLineAnnotation(p, r, line, y, height, active)
@@ -436,6 +447,10 @@ func (ed *editor) paintLineAnnotations(p *ui.Painter, r ui.Rect, f *frame) {
 		p.Fill(ui.Rect{X: r.X + ed.annotationW - 1, Y: r.Y, W: 1, H: r.H}, ed.theme.StickyBorder, 0)
 	})
 }
+
+// lineAnnotationBorderGap is the clear space, in DIPs, at each end of a range's
+// border: two together separate neighbouring ranges.
+const lineAnnotationBorderGap = float32(1)
 
 // annotationTipDelay is how long the pointer rests on a button before its name shows.
 const annotationTipDelay = 350 * time.Millisecond
