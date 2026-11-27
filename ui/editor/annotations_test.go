@@ -219,7 +219,7 @@ func TestLineAnnotationResizeAndRangeBorder(t *testing.T) {
 	if ed.lineAnnotationFor(1) != nil || ed.lineAnnotationRange(3) != nil {
 		t.Fatal("a range duplicated its summary or overran its last line")
 	}
-	r, g, b := ct.pixel(2, ed.view.lineHeight*1.5)
+	r, g, b := ct.pixel(5, ed.view.lineHeight*1.5)
 	if r < 200 || g > 80 || b > 80 {
 		t.Fatalf("continuation border pixel = %d,%d,%d, want red", r, g, b)
 	}

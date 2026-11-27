@@ -277,7 +277,8 @@ func (ed *editor) paintLineAnnotation(p *ui.Painter, r ui.Rect, line int, y, hei
 	if annotation == nil || ed.annotationW <= 0 {
 		return
 	}
-	const horizontalPadding = float32(8)
+	// Wide enough to clear the range border's inset and width.
+	const horizontalPadding = float32(14)
 	const detailGap = float32(10)
 	const dateGap = float32(12)
 	x := r.X + horizontalPadding
@@ -438,7 +439,10 @@ func (ed *editor) paintLineAnnotations(p *ui.Painter, r ui.Rect, f *frame) {
 					bottom -= lineAnnotationBorderGap
 				}
 				if bottom > top {
-					p.Fill(ui.Rect{X: r.X + 1, Y: top, W: 3, H: bottom - top}, annotation.Border, 0)
+					// Inset from the edge, rounded and a little softer, so a column of
+					// many ranges reads as quiet marks, not a busy stripe.
+					p.Fill(ui.Rect{X: r.X + lineAnnotationBorderInset, Y: top, W: 3, H: bottom - top},
+						annotation.Border.Alpha(0.85), 1.5)
 				}
 			}
 			active := ed.hoverLine == line || f.activeLines[line]
@@ -451,6 +455,9 @@ func (ed *editor) paintLineAnnotations(p *ui.Painter, r ui.Rect, f *frame) {
 // lineAnnotationBorderGap is the clear space, in DIPs, at each end of a range's
 // border: two together separate neighbouring ranges.
 const lineAnnotationBorderGap = float32(1)
+
+// lineAnnotationBorderInset is the border's distance from the editor's left edge.
+const lineAnnotationBorderInset = float32(4)
 
 // annotationTipDelay is how long the pointer rests on a button before its name shows.
 const annotationTipDelay = 350 * time.Millisecond
