@@ -190,6 +190,39 @@ func TestLineAnnotationDetailsHoverAnchorsToItsButton(t *testing.T) {
 	}
 }
 
+func TestLineAnnotationDetailsHoverStaysAcrossItsCommitRange(t *testing.T) {
+	ct := newEditorTest(t, "", "|first\nsecond\nthird\n")
+	ct.st.LineAnnotationWidth = 300
+	end := ct.st.Buffer.Snapshot().LineEnd(0)
+	ct.st.SetLineAnnotations([]LineAnnotation{
+		{
+			Line: 0, LastLine: 1, Text: "Ada • one commit", ActionClick: func() {},
+			DetailsClick: func() { ct.st.ShowHover(end, end, "commit details", nil) },
+		},
+		{Line: 2, Text: "Lin • another commit"},
+	})
+	ct.tt.Frame()
+	ed := &ct.st.ed
+	detailsX := ed.annotationW - lineAnnotationActionWidth*1.5
+	ct.tt.Press(detailsX, ed.view.lineHeight/2)
+	ct.tt.Release(detailsX, ed.view.lineHeight/2)
+	ct.tt.Frame()
+
+	ct.tt.Move(ed.annotationW/2, ed.view.lineHeight*1.5)
+	ct.tt.Advance(hoverHideDelay * 2)
+	ct.tt.Frame()
+	if !ed.hover.shown {
+		t.Fatal("details hover closed while the pointer stayed in its commit range")
+	}
+
+	ct.tt.Move(ed.annotationW/2, ed.view.lineHeight*2.5)
+	ct.tt.Advance(hoverHideDelay * 2)
+	ct.tt.Frame()
+	if ed.hover.shown {
+		t.Fatal("details hover stayed after the pointer moved to another commit")
+	}
+}
+
 func TestLineAnnotationTextElidesWithoutChangingValue(t *testing.T) {
 	ct := newEditorTest(t, "", "first\n")
 	ct.st.LineAnnotationWidth = 180

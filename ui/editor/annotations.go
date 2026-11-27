@@ -73,6 +73,14 @@ type lineAnnotationResize struct {
 	startX, startWidth float32
 }
 
+// lineAnnotationHoverAnchor is the details button and commit range that opened
+// an application hover. It contains only geometry and model indexes, never an
+// Element whose build lifetime would expire.
+type lineAnnotationHoverAnchor struct {
+	bounds         ui.Rect
+	line, lastLine int
+}
+
 // LineAnnotationAvatar is a small author image at the start of an annotation.
 // Bitmap is an optional non-blocking cache lookup: nil keeps the generated
 // initial, allowing an image to appear on a later frame without rebuilding the
@@ -174,6 +182,24 @@ func (ed *editor) lineAnnotationAt(x, y float32) *LineAnnotation {
 		return nil
 	}
 	return ed.lineAnnotationFor(line)
+}
+
+// lineAnnotationRangeAt returns the commit range under the pointer in the
+// annotation column, including continuation lines without their own summary.
+func (ed *editor) lineAnnotationRangeAt(x, y float32) *LineAnnotation {
+	if ed.annotationW <= 0 || x < 0 || x >= ed.annotationW {
+		return nil
+	}
+	_, cy := ed.toContent(x, y)
+	line := ed.view.heights.lineAt(cy)
+	if line < 0 || line >= ed.view.text.LineCount() {
+		return nil
+	}
+	geometry := ed.view.heights.geometry(line)
+	if cy < geometry.rows || cy >= geometry.below {
+		return nil
+	}
+	return ed.lineAnnotationRange(line)
 }
 
 // lineAnnotationSlotAt returns the annotation and trailing action button that

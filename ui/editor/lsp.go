@@ -433,7 +433,7 @@ type hover struct {
 	focused bool
 	// anchor, when set, is an application hover opened synchronously from a
 	// line annotation's details button instead of a source-text range.
-	anchor *ui.Rect
+	anchor *lineAnnotationHoverAnchor
 }
 
 // defaultHoverDelay is how long the pointer rests before a hover is asked

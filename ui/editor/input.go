@@ -531,7 +531,13 @@ func (ed *editor) pointerMove(ev ui.InputEvent) bool {
 	// Off the text hovered, the hover goes after a grace, so that the
 	// pointer can go into it, as the build sees (hideAt).
 	if h.shown {
-		if off >= 0 && off >= h.start && off <= h.end {
+		inAnnotationRange := false
+		if h.anchor != nil {
+			if annotation := ed.lineAnnotationRangeAt(ev.X, ev.Y); annotation != nil {
+				inAnnotationRange = annotation.Line == h.anchor.line && annotation.LastLine == h.anchor.lastLine
+			}
+		}
+		if inAnnotationRange || off >= 0 && off >= h.start && off <= h.end {
 			h.hideAt = time.Time{}
 		} else if h.hideAt.IsZero() {
 			h.hideAt = ed.frameNow.Add(hoverHideDelay)
@@ -698,11 +704,14 @@ func (ed *editor) gutterPress(ev ui.InputEvent) bool {
 			index := int((ed.annotationW - ev.X) / lineAnnotationActionWidth)
 			if index >= 0 && index < len(slots) {
 				geometry := ed.view.heights.geometry(annotation.Line)
-				ed.annotationActionAnchor = &ui.Rect{
-					X: ed.annotationW - lineAnnotationActionWidth*float32(index+1),
-					Y: float32(geometry.rows-ed.scrollY) + ed.sticky,
-					W: lineAnnotationActionWidth,
-					H: ed.view.lineHeight,
+				ed.annotationActionAnchor = &lineAnnotationHoverAnchor{
+					bounds: ui.Rect{
+						X: ed.annotationW - lineAnnotationActionWidth*float32(index+1),
+						Y: float32(geometry.rows-ed.scrollY) + ed.sticky,
+						W: lineAnnotationActionWidth,
+						H: ed.view.lineHeight,
+					},
+					line: annotation.Line, lastLine: annotation.LastLine,
 				}
 			}
 		}

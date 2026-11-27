@@ -262,7 +262,7 @@ type editor struct {
 	annotationTipSince               time.Time
 	// annotationActionAnchor exists only while a line annotation action's
 	// callback runs. ShowHover copies it when the details action opens a card.
-	annotationActionAnchor *ui.Rect
+	annotationActionAnchor *lineAnnotationHoverAnchor
 
 	frameNow   time.Time
 	needsBuild bool

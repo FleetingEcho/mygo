@@ -164,8 +164,9 @@ func (ed *editor) build(c *ui.Context, buf *Buffer, o options) ui.Element {
 		}
 		if h.shown {
 			if anchor := h.anchor; anchor != nil {
+				bounds := anchor.bounds
 				hoverAnchor = ui.Box(c).Key("code hover anchor").Absolute().
-					Left(anchor.X).Top(anchor.Y).Size(anchor.W, anchor.H).PassThrough()
+					Left(bounds.X).Top(bounds.Y).Size(bounds.W, bounds.H).PassThrough()
 				hasHover = true
 			} else {
 				at := h.start + (h.end-h.start)/2
