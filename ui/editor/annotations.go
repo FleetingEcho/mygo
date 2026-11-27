@@ -4,6 +4,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -434,4 +435,34 @@ func (ed *editor) paintLineAnnotations(p *ui.Painter, r ui.Rect, f *frame) {
 		}
 		p.Fill(ui.Rect{X: r.X + ed.annotationW - 1, Y: r.Y, W: 1, H: r.H}, ed.theme.StickyBorder, 0)
 	})
+}
+
+// annotationTipDelay is how long the pointer rests on a button before its name shows.
+const annotationTipDelay = 350 * time.Millisecond
+
+// paintAnnotationTip names the annotation button under the resting pointer in a
+// small card just above it, or below it when the row is at the top. It is drawn
+// by the editor, over everything it paints, so it stays beside the button
+// instead of anchoring to the text.
+func (ed *editor) paintAnnotationTip(p *ui.Painter, r ui.Rect) {
+	if ed.annotationTip == "" || !ed.pointerIn {
+		return
+	}
+	if p.Now().Sub(ed.annotationTipSince) < annotationTipDelay {
+		p.AnimationFrame()
+		return
+	}
+	v := &ed.view
+	const padX, padY, gap = float32(9), float32(5), float32(4)
+	layout := v.shaped.get(ed.annotationTip, v.style)
+	w, h := layout.Width+padX*2, v.lineHeight+padY*2
+	x := min(max(r.X+ed.annotationTipX-w/2, r.X+gap), r.X+r.W-w-gap)
+	y := r.Y + ed.annotationTipRow - h - gap
+	if y < r.Y+gap {
+		y = r.Y + ed.annotationTipRow + v.lineHeight + gap
+	}
+	card := ui.Rect{X: x, Y: y, W: w, H: h}
+	p.Fill(card, ed.theme.Background, 5)
+	p.Stroke(card, ed.theme.StickyBorder, 5, 1)
+	v.paintLineAnnotationText(p, ed.annotationTip, x+padX, y+padY, ed.theme.Text)
 }

@@ -260,10 +260,9 @@ func TestLineAnnotationWidthLeavesSourceRoom(t *testing.T) {
 	}
 }
 
-func TestLineAnnotationButtonsShowTheirTooltips(t *testing.T) {
+func TestLineAnnotationButtonsTrackTheirTooltips(t *testing.T) {
 	ct := newEditorTest(t, "", "first\nsecond\nthird\n")
 	ct.st.LineAnnotationWidth = 300
-	ct.st.HoverDelay = 100 * time.Millisecond
 	ct.st.SetLineAnnotations([]LineAnnotation{{
 		Line: 1, Text: "Ada • second change",
 		ActionClick: func() {}, ActionTooltip: "View blame prior to this change",
@@ -272,17 +271,23 @@ func TestLineAnnotationButtonsShowTheirTooltips(t *testing.T) {
 	ct.tt.Frame()
 	ed := &ct.st.ed
 	y := ed.view.lineHeight * 1.5
-	rest := func(slot float32) {
+	over := func(slot float32) {
 		ct.tt.Move(ed.annotationW-lineAnnotationActionWidth*slot-lineAnnotationActionWidth/2, y)
-		ct.tt.Advance(200 * time.Millisecond)
 		ct.tt.Frame()
 	}
-	rest(0)
-	if !ed.hover.shown || ed.hover.text != "View blame prior to this change" {
-		t.Fatalf("history tooltip = %v %q", ed.hover.shown, ed.hover.text)
+	over(0)
+	historyX := ed.annotationTipX
+	if ed.annotationTip != "View blame prior to this change" {
+		t.Fatalf("history tooltip = %q", ed.annotationTip)
 	}
-	rest(1)
-	if !ed.hover.shown || ed.hover.text != "Show commit details" {
-		t.Fatalf("details tooltip = %v %q", ed.hover.shown, ed.hover.text)
+	over(1)
+	if ed.annotationTip != "Show commit details" || ed.annotationTipX >= historyX {
+		t.Fatalf("details tooltip = %q at %v, history at %v", ed.annotationTip, ed.annotationTipX, historyX)
+	}
+	// Off the buttons the tooltip goes, and it never became a hover request.
+	ct.tt.Move(ed.annotationW/4, y)
+	ct.tt.Frame()
+	if ed.annotationTip != "" || ed.hover.shown {
+		t.Fatalf("tooltip stayed: %q, hover shown %v", ed.annotationTip, ed.hover.shown)
 	}
 }

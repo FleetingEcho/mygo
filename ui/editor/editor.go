@@ -256,6 +256,10 @@ type editor struct {
 	annotationResize lineAnnotationResize
 	// annotationTip is the tooltip of the annotation button under the pointer.
 	annotationTip string
+	// annotationTipX and annotationTipRow place it: the button's center, and its
+	// row's top, both inside the editor. annotationTipSince is when it began.
+	annotationTipX, annotationTipRow float32
+	annotationTipSince               time.Time
 
 	frameNow   time.Time
 	needsBuild bool

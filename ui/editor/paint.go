@@ -192,6 +192,7 @@ func (ed *editor) paint(p *ui.Painter, r ui.Rect) {
 	ed.paintGutter(p, r, &f)
 	ed.paintSticky(p, r)
 	ed.paintScrollbars(p, r, &f)
+	ed.paintAnnotationTip(p, r)
 	if v.approx || more {
 		p.AnimationFrame()
 	}
