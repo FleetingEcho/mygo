@@ -140,7 +140,13 @@ func (ed *editor) build(c *ui.Context, buf *Buffer, o options) ui.Element {
 			c.After(wait)
 		} else {
 			h.pending = false
-			ed.requestHover(h.restOff)
+			if tip := ed.annotationTip; tip != "" {
+				// A button's name, not a question for the app.
+				h.shown, h.start, h.end, h.text, h.build, h.diags = true, h.restOff, h.restOff, tip, nil, nil
+				ed.needsBuild = true
+			} else {
+				ed.requestHover(h.restOff)
+			}
 			h.byPointer = true
 		}
 	}

@@ -490,12 +490,22 @@ func (ed *editor) pointerMove(ev ui.InputEvent) bool {
 	}
 	h := &ed.hover
 	off := -1
-	if annotation := ed.lineAnnotationAt(ev.X, ev.Y); annotation != nil {
-		// The annotation column is never a hover target: its details open from
-		// the button, so resting the pointer on it opens nothing.
-		off = -1
+	tip := ""
+	if annotation, slot := ed.lineAnnotationSlotAt(ev.X, ev.Y); annotation != nil {
+		// The annotation column is never a hover target for the app: its details
+		// open from the button. Resting on a button only names it, in a small
+		// tooltip anchored at its line's start, beside the gutter.
+		if slot != nil && slot.tip != "" {
+			tip = slot.tip
+			off = ed.view.text.LineStart(annotation.Line)
+		}
 	} else {
 		off = ed.textAt(ev.X, ev.Y)
+	}
+	if tip != ed.annotationTip {
+		ed.annotationTip = tip
+		// Another button on the same line is a new request.
+		h.restOff = -2
 	}
 	// Trailing inlays are the exception: their caret deliberately stays
 	// before them, but their rendered text is still a hover target. Not a
@@ -527,7 +537,7 @@ func (ed *editor) pointerMove(ev ui.InputEvent) bool {
 			changed = true
 		}
 	}
-	if off >= 0 && !ed.o.noPointerHover && (ed.o.onHover != nil || len(ed.diags) > 0) && off != h.restOff {
+	if off >= 0 && !ed.o.noPointerHover && (ed.o.onHover != nil || len(ed.diags) > 0 || tip != "") && off != h.restOff {
 		h.restOff, h.restAt, h.pending = off, ed.frameNow, true
 		changed = true
 	}

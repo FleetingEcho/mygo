@@ -254,6 +254,8 @@ type editor struct {
 
 	// annotationResize is a drag on the line annotation column's separator.
 	annotationResize lineAnnotationResize
+	// annotationTip is the tooltip of the annotation button under the pointer.
+	annotationTip string
 
 	frameNow   time.Time
 	needsBuild bool

@@ -259,3 +259,30 @@ func TestLineAnnotationWidthLeavesSourceRoom(t *testing.T) {
 		t.Fatalf("narrow editor annotation width = %v, want within 55%%", st.ed.annotationW)
 	}
 }
+
+func TestLineAnnotationButtonsShowTheirTooltips(t *testing.T) {
+	ct := newEditorTest(t, "", "first\nsecond\nthird\n")
+	ct.st.LineAnnotationWidth = 300
+	ct.st.HoverDelay = 100 * time.Millisecond
+	ct.st.SetLineAnnotations([]LineAnnotation{{
+		Line: 1, Text: "Ada • second change",
+		ActionClick: func() {}, ActionTooltip: "View blame prior to this change",
+		DetailsClick: func() {}, DetailsTooltip: "Show commit details",
+	}})
+	ct.tt.Frame()
+	ed := &ct.st.ed
+	y := ed.view.lineHeight * 1.5
+	rest := func(slot float32) {
+		ct.tt.Move(ed.annotationW-lineAnnotationActionWidth*slot-lineAnnotationActionWidth/2, y)
+		ct.tt.Advance(200 * time.Millisecond)
+		ct.tt.Frame()
+	}
+	rest(0)
+	if !ed.hover.shown || ed.hover.text != "View blame prior to this change" {
+		t.Fatalf("history tooltip = %v %q", ed.hover.shown, ed.hover.text)
+	}
+	rest(1)
+	if !ed.hover.shown || ed.hover.text != "Show commit details" {
+		t.Fatalf("details tooltip = %v %q", ed.hover.shown, ed.hover.text)
+	}
+}
