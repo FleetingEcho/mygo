@@ -208,6 +208,13 @@ func TestLineAnnotationDetailsHoverStaysAcrossItsCommitRange(t *testing.T) {
 	ct.tt.Release(detailsX, ed.view.lineHeight/2)
 	ct.tt.Frame()
 
+	ct.tt.Move(ed.annotationW/2, ed.view.lineHeight/2)
+	ct.tt.Advance(hoverHideDelay * 2)
+	ct.tt.Frame()
+	if !ed.hover.shown {
+		t.Fatal("details hover closed while the pointer stayed on its commit summary row")
+	}
+
 	ct.tt.Move(ed.annotationW/2, ed.view.lineHeight*1.5)
 	ct.tt.Advance(hoverHideDelay * 2)
 	ct.tt.Frame()
