@@ -569,10 +569,17 @@ func (st *State) ShowCompletions(start int, items []Completion) {
 
 // ShowHover shows what the text from start to end is: text in the
 // editor's font, and what build adds, as a hover of a language server.
+// Called synchronously from a LineAnnotation's DetailsClick, it attaches the
+// hover to that details button instead of the source range.
 func (st *State) ShowHover(start, end int, text string, build func(c *ui.Context)) {
 	st.ensure()
 	h := &st.ed.hover
 	h.shown, h.start, h.end, h.text, h.build = true, start, end, text, build
+	h.anchor = nil
+	if anchor := st.ed.annotationActionAnchor; anchor != nil {
+		copy := *anchor
+		h.anchor = &copy
+	}
 	if h.diags == nil {
 		h.diags = st.ed.diagnosticsAt(start)
 	}

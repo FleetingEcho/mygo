@@ -163,7 +163,14 @@ func (ed *editor) build(c *ui.Context, buf *Buffer, o options) ui.Element {
 			caretAnchor, hasCaret = ed.boxAt(c, "code caret", ed.complete.at)
 		}
 		if h.shown {
-			hoverAnchor, hasHover = ed.boxAt(c, "code hover anchor", h.start)
+			if anchor := h.anchor; anchor != nil {
+				hoverAnchor = ui.Box(c).Key("code hover anchor").Absolute().
+					Left(anchor.X).Top(anchor.Y).Size(anchor.W, anchor.H).PassThrough()
+				hasHover = true
+			} else {
+				at := h.start + (h.end-h.start)/2
+				hoverAnchor, hasHover = ed.boxAt(c, "code hover anchor", at)
+			}
 		}
 		if ed.sig.shown {
 			sigAnchor, hasSig = ed.boxAt(c, "code signature anchor", ed.sig.start)

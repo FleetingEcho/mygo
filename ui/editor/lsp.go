@@ -431,6 +431,9 @@ type hover struct {
 	// keeps it.
 	hideAt  time.Time
 	focused bool
+	// anchor, when set, is an application hover opened synchronously from a
+	// line annotation's details button instead of a source-text range.
+	anchor *ui.Rect
 }
 
 // defaultHoverDelay is how long the pointer rests before a hover is asked
@@ -446,6 +449,7 @@ func (h *hover) open() bool { return h.shown }
 
 func (h *hover) close() {
 	h.shown, h.build, h.text, h.diags, h.byPointer = false, nil, "", nil, false
+	h.anchor = nil
 	h.hideAt, h.focused = time.Time{}, false
 	h.asked = -1
 	h.pending = false

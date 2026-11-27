@@ -692,8 +692,24 @@ func (ed *editor) gutterPress(ev ui.InputEvent) bool {
 			return true
 		}
 	}
-	if click := ed.lineAnnotationActionAt(ev.X, ev.Y); click != nil {
-		click()
+	if annotation, slot := ed.lineAnnotationSlotAt(ev.X, ev.Y); slot != nil {
+		if slot.hoverAnchor {
+			slots := annotation.actionSlots()
+			index := int((ed.annotationW - ev.X) / lineAnnotationActionWidth)
+			if index >= 0 && index < len(slots) {
+				geometry := ed.view.heights.geometry(annotation.Line)
+				ed.annotationActionAnchor = &ui.Rect{
+					X: ed.annotationW - lineAnnotationActionWidth*float32(index+1),
+					Y: float32(geometry.rows-ed.scrollY) + ed.sticky,
+					W: lineAnnotationActionWidth,
+					H: ed.view.lineHeight,
+				}
+			}
+		}
+		func() {
+			defer func() { ed.annotationActionAnchor = nil }()
+			slot.click()
+		}()
 		return true
 	}
 	if annotation := ed.lineAnnotationAt(ev.X, ev.Y); annotation != nil && annotation.Click != nil {

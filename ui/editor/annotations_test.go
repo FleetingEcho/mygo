@@ -163,6 +163,33 @@ func TestLineAnnotationDetailsButtonSitsBesideHistory(t *testing.T) {
 	}
 }
 
+func TestLineAnnotationDetailsHoverAnchorsToItsButton(t *testing.T) {
+	ct := newEditorTest(t, "", "|a source line long enough to put its end far from the annotation details button\n")
+	ct.st.LineAnnotationWidth = 300
+	var anchor ui.Rect
+	ct.st.RenderHover = func(c *ui.Context, panel ui.Element, h *HoverCard) {
+		anchor = h.Anchor().Bounds()
+	}
+	end := ct.st.Buffer.Snapshot().LineEnd(0)
+	ct.st.SetLineAnnotations([]LineAnnotation{{
+		Line: 0, Text: "Ada • a change",
+		ActionClick: func() {},
+		DetailsClick: func() {
+			ct.st.ShowHover(end, end, "commit details", nil)
+		},
+	}})
+	ct.tt.Frame()
+	ed := &ct.st.ed
+	detailsX := ed.annotationW - lineAnnotationActionWidth*1.5
+	ct.tt.Press(detailsX, ed.view.lineHeight/2)
+	ct.tt.Release(detailsX, ed.view.lineHeight/2)
+	ct.tt.Frame()
+	ct.tt.Frame()
+	if anchor.W == 0 || anchor.X < detailsX-lineAnnotationActionWidth/2 || anchor.X > detailsX+lineAnnotationActionWidth/2 {
+		t.Fatalf("details hover anchor = %+v, want it over the details button around x=%v", anchor, detailsX)
+	}
+}
+
 func TestLineAnnotationTextElidesWithoutChangingValue(t *testing.T) {
 	ct := newEditorTest(t, "", "first\n")
 	ct.st.LineAnnotationWidth = 180

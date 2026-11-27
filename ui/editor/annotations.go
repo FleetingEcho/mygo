@@ -34,7 +34,8 @@ type LineAnnotation struct {
 	ActionClick func()
 	// DetailsClick shows an information button beside the history action, for
 	// the app to open the range's commit details. Hovering the column never
-	// opens anything; details open only from this button.
+	// opens anything; details open only from this button. A ShowHover call made
+	// synchronously by this callback attaches its card to the button.
 	DetailsClick func()
 	// ActionTooltip and DetailsTooltip name the two buttons when the pointer
 	// rests on them. Without one, the button shows no tooltip.
@@ -44,9 +45,10 @@ type LineAnnotation struct {
 
 // lineAnnotationActionSlot is one trailing action button.
 type lineAnnotationActionSlot struct {
-	click func()
-	tip   string
-	paint func(p *ui.Painter, x, y float32, color, background ui.Color)
+	click       func()
+	tip         string
+	paint       func(p *ui.Painter, x, y float32, color, background ui.Color)
+	hoverAnchor bool
 }
 
 // actionSlots lists the trailing buttons from the column's right edge inward:
@@ -54,10 +56,12 @@ type lineAnnotationActionSlot struct {
 func (a *LineAnnotation) actionSlots() []lineAnnotationActionSlot {
 	var slots []lineAnnotationActionSlot
 	if a.ActionClick != nil {
-		slots = append(slots, lineAnnotationActionSlot{a.ActionClick, a.ActionTooltip, paintLineAnnotationAction})
+		slots = append(slots, lineAnnotationActionSlot{click: a.ActionClick, tip: a.ActionTooltip, paint: paintLineAnnotationAction})
 	}
 	if a.DetailsClick != nil {
-		slots = append(slots, lineAnnotationActionSlot{a.DetailsClick, a.DetailsTooltip, paintLineAnnotationDetails})
+		slots = append(slots, lineAnnotationActionSlot{
+			click: a.DetailsClick, tip: a.DetailsTooltip, paint: paintLineAnnotationDetails, hoverAnchor: true,
+		})
 	}
 	return slots
 }
@@ -185,15 +189,6 @@ func (ed *editor) lineAnnotationSlotAt(x, y float32) (*LineAnnotation, *lineAnno
 		return annotation, nil
 	}
 	return annotation, &slots[index]
-}
-
-// lineAnnotationActionAt returns the click handler of the trailing action icon
-// that contains x, y.
-func (ed *editor) lineAnnotationActionAt(x, y float32) func() {
-	if _, slot := ed.lineAnnotationSlotAt(x, y); slot != nil {
-		return slot.click
-	}
-	return nil
 }
 
 // lineAnnotationResizeAt reports whether x is in the trailing separator's

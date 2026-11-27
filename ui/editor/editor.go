@@ -260,6 +260,9 @@ type editor struct {
 	// row's top, both inside the editor. annotationTipSince is when it began.
 	annotationTipX, annotationTipRow float32
 	annotationTipSince               time.Time
+	// annotationActionAnchor exists only while a line annotation action's
+	// callback runs. ShowHover copies it when the details action opens a card.
+	annotationActionAnchor *ui.Rect
 
 	frameNow   time.Time
 	needsBuild bool
